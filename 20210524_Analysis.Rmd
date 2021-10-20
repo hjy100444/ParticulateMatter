@@ -1,0 +1,3176 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+#Initialization
+###load libraries
+```{r}
+library(DESeq2)
+library(pheatmap)
+library(RColorBrewer)
+library(Rsubread)
+library(apeglm)
+library(ashr)
+library(ViSEAGO)
+library(plotly)
+library(UpSetR)
+library(biomaRt)
+```
+
+###save/load Rdata
+1. Save/Load only Featurecounts_tables
+.RData_processed
+.Rdata
+```{r}
+load("G:/Seq_data/PM/20210524_Analysis/.RData_processed")
+```
+2. Save/Load data tables
+```{r}
+save.image("G:/Seq_data/PM/20210524_Analysis/.RData_processed")
+```
+
+###load/initialize analysis
+Initialize ViSEAGO::Ensembl database
+```{r}
+#Due to the typo in the latest version of the Ensembl database, I chose 104 version
+Ensembl <-ViSEAGO::Ensembl2GO('genes',version='104')
+##ViSEAGO::available_organisms(Ensembl)
+
+myGENE2GO<-ViSEAGO::annotate('hsapiens_gene_ensembl',Ensembl)
+myGENE2GO_mouse<-ViSEAGO::annotate('mmusculus_gene_ensembl',Ensembl)
+```
+
+
+#Pre-processing_Quantification
+```{r}
+GTF = "G:/Ref_files/GTF/gencode.v27.chr_patch_hapl_scaff.annotation_protein_level1_2.gtf"
+
+setwd("G:/Seq_data/PM/20200302/fastq/newHISAT2")
+BAM =c('NC-1_unique_concordant.bam',
+       'NC-2_unique_concordant.bam',
+           'NC-3_unique_concordant.bam',
+           'Nit-1_unique_concordant.bam',
+       'Nit-2_unique_concordant.bam',
+           'Nit-3_unique_concordant.bam',
+           'Sul-1_unique_concordant.bam',
+       'Sul-2_unique_concordant.bam',
+           'Sul-3_unique_concordant.bam',
+           'Mix-1_unique_concordant.bam',
+       'Mix-2_unique_concordant.bam',
+           'Mix-3_unique_concordant.bam'
+       )
+
+PM_featureCounts_5mM = featureCounts(BAM,
+                            annot.ext=GTF,
+                            isGTFAnnotationFile = T,
+                            GTF.featureType = 'exon',
+                            GTF.attrType = 'gene_id',
+                            allowMultiOverlap = F,
+                            minOverlap = 5,
+                            read2pos = 'NULL',
+                            strandSpecific = 2,
+                            primaryOnly = T,
+                            isPairedEnd = T,
+                            requireBothEndsMapped = T,
+                            nthreads=16
+                            )
+
+###diverse concentration of Ammonium salt mix
+setwd("G:/Seq_data/PM/20210205/fastq/")
+BAM =c('NC1_unique_concordant.bam',
+       'NC2_unique_concordant.bam',
+       'Mix1_1_unique_concordant.bam',
+       'Mix1_2_unique_concordant.bam',
+       'Mix2_1_unique_concordant.bam',
+       'Mix2_2_unique_concordant.bam',
+       'Mix3_1_unique_concordant.bam',
+       'Mix3_2_unique_concordant.bam',
+       'Mix4_1_unique_concordant.bam',
+       'Mix4_2_unique_concordant.bam',
+       'Mix5_1_unique_concordant.bam',
+       'Mix5_2_unique_concordant.bam',
+       'Mix6_1_unique_concordant.bam',
+       'Mix6_2_unique_concordant.bam'
+       )
+
+PM_featureCounts = featureCounts(BAM,
+                            annot.ext=GTF,
+                            isGTFAnnotationFile = T,
+                            GTF.featureType = 'exon',
+                            GTF.attrType = 'gene_id',
+                            allowMultiOverlap = F,
+                            minOverlap = 5,
+                            read2pos = 'NULL',
+                            strandSpecific = 2,
+                            primaryOnly = T,
+                            isPairedEnd = T,
+                            requireBothEndsMapped = T,
+                            nthreads=16
+                            )
+###high concentration of ammonium salts in mouse
+GTF_mouse = 'G:/Ref_files/GTF/gencode.vM25.annotation_protein_coding_level1_2.gtf'
+
+setwd("G:/Seq_data/PM/20200925/newHISAT2")
+BAM =c('con-1_unique_concordant.bam',
+             'con-3_unique_concordant.bam',
+             'exp-1_unique_concordant.bam',
+             'exp-3_unique_concordant.bam'
+       )
+
+PM_featureCounts_mouse = featureCounts(BAM,
+                            annot.ext=GTF_mouse,
+                            isGTFAnnotationFile = T,
+                            GTF.featureType = 'exon',
+                            GTF.attrType = 'gene_id',
+                            allowMultiOverlap = F,
+                            minOverlap = 5,
+                            read2pos = 'NULL',
+                            strandSpecific = 2,
+                            primaryOnly = T,
+                            isPairedEnd = T,
+                            requireBothEndsMapped = T,
+                            nthreads=16
+                            )
+
+###different composition of ammonium nitrate and sulfate
+setwd("G:/Seq_data/PM/20210909/fastq/")
+BAM =c('NC_1_unique_concordant.bam',
+       'NC_2_unique_concordant.bam',
+       'NC_3_unique_concordant.bam',
+       '0_1_unique_concordant.bam',
+       '0_2_unique_concordant.bam',
+       '0_3_unique_concordant.bam',
+       '50_1_unique_concordant.bam',
+       '50_2_unique_concordant.bam',
+       '50_3_unique_concordant.bam',
+       '100_1_unique_concordant.bam',
+       '100_2_unique_concordant.bam',
+       '100_3_unique_concordant.bam',
+       '150_1_unique_concordant.bam',
+       '150_2_unique_concordant.bam',
+       '150_3_unique_concordant.bam',
+       '200_1_unique_concordant.bam',
+       '200_2_unique_concordant.bam',
+       '200_3_unique_concordant.bam'
+       )
+
+PM_featureCounts_comp = featureCounts(BAM,
+                            annot.ext=GTF,
+                            isGTFAnnotationFile = T,
+                            GTF.featureType = 'exon',
+                            GTF.attrType = 'gene_id',
+                            allowMultiOverlap = F,
+                            minOverlap = 5,
+                            read2pos = 'NULL',
+                            strandSpecific = 2,
+                            primaryOnly = T,
+                            isPairedEnd = T,
+                            requireBothEndsMapped = T,
+                            nthreads=16
+                            )
+```
+
+
+#Analysis_A549
+###Construct DESeq2 object
+```{r}
+#combine featureCounts tables
+colnames_total=c('NC-1','NC-2','Mix1-1','Mix1-2','Mix2-1','Mix2-2','Mix3-1','Mix3-2','Mix4-1','Mix4-2','Mix5-1','Mix5-2','Mix6-1','Mix6-2',
+           'NC-3','NC-4','NC-5','Nit-1','Nit-2','Nit-3','Sul-1','Sul-2','Sul-3','Mix-1','Mix-2','Mix-3')
+
+counts_total <- cbind(as.data.frame(PM_featureCounts$counts),as.data.frame(PM_featureCounts_5mM$counts))
+counts_total$gene_id <-rownames(counts_total)
+counts_total=counts_total[!grepl('PAR_Y',counts_total$gene_id),]
+rownames(counts_total)=substr(rownames(counts_total),1,15)
+counts_total<-counts_total[c(-ncol(counts_total))]
+colnames(counts_total)=colnames_total
+counts_total <- counts_total[,c('NC-1','NC-2','Mix1-1','Mix1-2','Mix2-1','Mix2-2','Mix3-1','Mix3-2','Mix4-1','Mix4-2','Mix5-1','Mix5-2','Mix6-1','Mix6-2',
+           'NC-4','NC-5','Nit-2','Nit-3','Sul-2','Sul-3','Mix-2','Mix-3')]
+
+#Set DESeq2 object
+##high
+samples_high_list = c('NC-4','NC-5','Nit-2','Nit-3','Sul-2','Sul-3','Mix-2','Mix-3')
+samples_high = as.data.frame(samples_high_list)
+counts_high = counts_total[,samples_high_list]
+
+counts_high[counts_high==0]<-NA
+counts_high=na.omit(counts_high)
+keep_high <- rowSums(counts_high) >= 0
+counts_high <- counts_high[keep_high,]
+
+samples_high$condition <-factor(c(rep(c('aNC','Nit','Sul','Mix'),each=2)))
+dds_high<-DESeqDataSetFromMatrix(countData = counts_high,
+                           colData = samples_high,
+                           design = ~condition)
+dds_high<-DESeq(dds_high)
+
+##diverse
+samples_diverse_list=c('NC-1','NC-2','Mix1-1','Mix1-2','Mix2-1','Mix2-2','Mix3-1','Mix3-2','Mix4-1','Mix4-2','Mix5-1','Mix5-2','Mix6-1','Mix6-2')
+samples_diverse = as.data.frame(samples_diverse_list)
+counts_diverse<-counts_total[,samples_diverse_list]
+
+counts_diverse[counts_diverse==0]<-NA
+counts_diverse=na.omit(counts_diverse)
+keep_diverse <- rowSums(counts_diverse) >= 0
+counts_diverse <- counts_diverse[keep_diverse,]
+
+
+samples_diverse$condition<-factor(c(rep(c('aNC','Mix1','Mix2','Mix3','Mix4','Mix5','Mix6'),each=2)))
+dds_diverse<-DESeqDataSetFromMatrix(countData = counts_diverse,
+                           colData = samples_diverse,
+                           design = ~condition)
+dds_diverse<-DESeq(dds_diverse)
+```
+###Set BiomaRt
+human BiomaRt: Ensembl id to gene symbol or entrezid
+```{r}
+human_mart = useDataset("hsapiens_gene_ensembl",useMart("ensembl"))
+human_G_symbol_list = getBM(filters='ensembl_gene_id',attributes = c('ensembl_gene_id','hgnc_symbol'),
+                     values=rownames(counts_total),mart = human_mart,useCache=F)
+human_G_entrezid_list = getBM(filters='ensembl_gene_id',attributes = c('ensembl_gene_id','entrezgene_id'),
+                     values=rownames(counts_total),mart = human_mart,useCache=F)
+```
+###Find DEGs
+```{r}
+#Find DEGs
+# res_Nit <- results(dds_high,contrast=c("condition","Nit","aNC"))
+# res_Sul <- results(dds_high,contrast=c("condition","Sul","aNC"))
+# res_Mix <- results(dds_high,contrast=c("condition","Mix","aNC"))
+# res_Mix1 <- results(dds_diverse,contrast=c("condition","Mix1","aNC"))
+# res_Mix2 <- results(dds_diverse,contrast=c("condition","Mix2","aNC"))
+# res_Mix3 <- results(dds_diverse,contrast=c("condition","Mix3","aNC"))
+# res_Mix4 <- results(dds_diverse,contrast=c("condition","Mix4","aNC"))
+# res_Mix5 <- results(dds_diverse,contrast=c("condition","Mix5","aNC"))
+# res_Mix6 <- results(dds_diverse,contrast=c("condition","Mix6","aNC"))
+
+res_Nit<-lfcShrink(dds_high,coef="condition_Nit_vs_aNC",type='apeglm')
+res_Sul<-lfcShrink(dds_high,coef="condition_Sul_vs_aNC",type='apeglm')
+res_Mix<-lfcShrink(dds_high,coef="condition_Mix_vs_aNC",type='apeglm')
+res_Mix1<-lfcShrink(dds_diverse,coef="condition_Mix1_vs_aNC",type='apeglm')
+res_Mix2<-lfcShrink(dds_diverse,coef="condition_Mix2_vs_aNC",type='apeglm')
+res_Mix3<-lfcShrink(dds_diverse,coef="condition_Mix3_vs_aNC",type='apeglm')
+res_Mix4<-lfcShrink(dds_diverse,coef="condition_Mix4_vs_aNC",type='apeglm')
+res_Mix5<-lfcShrink(dds_diverse,coef="condition_Mix5_vs_aNC",type='apeglm')
+res_Mix6<-lfcShrink(dds_diverse,coef="condition_Mix6_vs_aNC",type='apeglm')
+
+res_Mix3$pvalue[is.na(res_Mix3$pvalue)]<-1
+res_Mix4$pvalue[is.na(res_Mix4$pvalue)]<-1
+res_Mix5$pvalue[is.na(res_Mix5$pvalue)]<-1
+res_Mix6$pvalue[is.na(res_Mix6$pvalue)]<-1
+
+#filter significant genes
+fc_threshold_high = 1.5
+pval_threshold_high = 0.01
+
+fc_threshold_diverse = 1
+pval_threshold_diverse = 0.01
+
+res_Nit$pvalue[is.na(res_Nit$pvalue)]<-1
+res_Sul$pvalue[is.na(res_Sul$pvalue)]<-1
+res_Mix$pvalue[is.na(res_Mix$pvalue)]<-1
+res_Mix1$pvalue[is.na(res_Mix1$pvalue)]<-1
+res_Mix2$pvalue[is.na(res_Mix2$pvalue)]<-1
+
+res_Nit_sig_up  = res_Nit[((res_Nit$log2FoldChange)>fc_threshold_high) & res_Nit$pvalue<pval_threshold_high,]
+res_Nit_sig_dw  = res_Nit[((res_Nit$log2FoldChange)< -fc_threshold_high) & res_Nit$pvalue<pval_threshold_high,]
+res_Nit_sig     = res_Nit[(abs(res_Nit$log2FoldChange)>fc_threshold_high) & res_Nit$pvalue<pval_threshold_high,]
+res_Sul_sig_up  = res_Sul[((res_Sul$log2FoldChange)>fc_threshold_high) & res_Sul$pvalue<pval_threshold_high,]
+res_Sul_sig_dw  = res_Sul[((res_Sul$log2FoldChange)< -fc_threshold_high) & res_Sul$pvalue<pval_threshold_high,]
+res_Sul_sig     = res_Sul[(abs(res_Sul$log2FoldChange)>fc_threshold_high) & res_Sul$pvalue<pval_threshold_high,]
+res_Mix_sig_up  = res_Mix[((res_Mix$log2FoldChange)>fc_threshold_high) & res_Mix$pvalue<pval_threshold_high,]
+res_Mix_sig_dw  = res_Mix[((res_Mix$log2FoldChange)< -fc_threshold_high) & res_Mix$pvalue<pval_threshold_high,]
+res_Mix_sig     = res_Mix[(abs(res_Mix$log2FoldChange)>fc_threshold_high) & res_Mix$pvalue<pval_threshold_high,]
+# res_Mix1_sig_up = res_Mix2[((res_Mix1$log2FoldChange)>fc_threshold_diverse) & res_Mix1$pvalue<pval_threshold_diverse,]
+# res_Mix1_sig_dw = res_Mix2[((res_Mix1$log2FoldChange)< -fc_threshold_diverse) & res_Mix1$pvalue<pval_threshold_diverse,]
+# res_Mix1_sig    = res_Mix1[(abs(res_Mix1$log2FoldChange)>fc_threshold_diverse) & res_Mix1$pvalue<pval_threshold_diverse,]
+# res_Mix2_sig_up = res_Mix2[((res_Mix2$log2FoldChange)>fc_threshold_diverse) & res_Mix2$pvalue<pval_threshold_diverse,]
+# res_Mix2_sig_dw = res_Mix2[((res_Mix2$log2FoldChange)< -fc_threshold_diverse) & res_Mix2$pvalue<pval_threshold_diverse,]
+# res_Mix2_sig    = res_Mix2[(abs(res_Mix2$log2FoldChange)>fc_threshold_diverse) & res_Mix2$pvalue<pval_threshold_diverse,]
+# res_Mix3_sig_up = res_Mix2[((res_Mix3$log2FoldChange)>fc_threshold_diverse) & res_Mix3$pvalue<pval_threshold_diverse,]
+# res_Mix3_sig_dw = res_Mix2[((res_Mix3$log2FoldChange)< -fc_threshold_diverse) & res_Mix3$pvalue<pval_threshold_diverse,]
+res_Mix3_sig    = res_Mix3[(abs(res_Mix3$log2FoldChange)>fc_threshold_diverse) & res_Mix3$pvalue<pval_threshold_diverse,]
+res_Mix4_sig_up = res_Mix4[((res_Mix4$log2FoldChange)>fc_threshold_diverse) & res_Mix4$pvalue<pval_threshold_diverse,]
+res_Mix4_sig_dw = res_Mix4[((res_Mix4$log2FoldChange)< -fc_threshold_diverse) & res_Mix4$pvalue<pval_threshold_diverse,]
+res_Mix4_sig    = res_Mix4[(abs(res_Mix4$log2FoldChange)>fc_threshold_diverse) & res_Mix4$pvalue<pval_threshold_diverse,]
+res_Mix5_sig_up = res_Mix5[((res_Mix5$log2FoldChange)>fc_threshold_diverse) & res_Mix5$pvalue<pval_threshold_diverse,]
+res_Mix5_sig_dw = res_Mix5[((res_Mix5$log2FoldChange)< -fc_threshold_diverse) & res_Mix5$pvalue<pval_threshold_diverse,]
+res_Mix5_sig    = res_Mix5[(abs(res_Mix5$log2FoldChange)>fc_threshold_diverse) & res_Mix5$pvalue<pval_threshold_diverse,]
+# res_Mix6_sig    = res_Mix6[(abs(res_Mix6$log2FoldChange)>fc_threshold_diverse) & res_Mix6$pvalue<pval_threshold_diverse,]
+
+selection_Nit_up  = rownames(res_Nit_sig_up)
+selection_Nit_dw  = rownames(res_Nit_sig_dw)
+selection_Nit  = rownames(res_Nit_sig)
+selection_Sul_up  = rownames(res_Sul_sig_up)
+selection_Sul_dw  = rownames(res_Sul_sig_dw)
+selection_Sul  = rownames(res_Sul_sig)
+selection_Mix_up  = rownames(res_Mix_sig_up)
+selection_Mix_dw  = rownames(res_Mix_sig_dw)
+selection_Mix  = rownames(res_Mix_sig)
+# selection_Mix1_up = rownames(res_Mix1_sig_up)
+# selection_Mix1_dw = rownames(res_Mix1_sig_dw)
+# selection_Mix1 = rownames(res_Mix1_sig)
+# selection_Mix2_up = rownames(res_Mix2_sig_up)
+# selection_Mix2_dw = rownames(res_Mix2_sig_dw)
+# selection_Mix2 = rownames(res_Mix2_sig)
+# selection_Mix3_up = rownames(res_Mix3_sig_up)
+# selection_Mix3_dw = rownames(res_Mix3_sig_dw)
+# selection_Mix3 = rownames(res_Mix3_sig)
+selection_Mix4_up = rownames(res_Mix4_sig_up)
+selection_Mix4_dw = rownames(res_Mix4_sig_dw)
+selection_Mix4 = rownames(res_Mix4_sig)
+selection_Mix5_up = rownames(res_Mix5_sig_up)
+selection_Mix5_dw = rownames(res_Mix5_sig_dw)
+selection_Mix5 = rownames(res_Mix5_sig)
+# selection_Mix6 = rownames(res_Mix6_sig)
+
+#Set background genes
+background_high <-unique(c(rownames(res_Nit),rownames(res_Sul),rownames(res_Mix)))
+background_diverse <-unique(c(rownames(res_Mix1),rownames(res_Mix2),rownames(res_Mix3),
+                              rownames(res_Mix4),rownames(res_Mix5)))
+
+#Combine significant genes
+###total
+selection_high <-unique(c(selection_Nit,selection_Sul,selection_Mix))
+res_high <- data.frame(res_Nit[selection_high,"log2FoldChange"],
+                       res_Sul[selection_high,"log2FoldChange"],
+                       res_Mix[selection_high,"log2FoldChange"])
+colnames(res_high)<-c('Nit','Sul','Mix')
+
+selection_diverse <-unique(c(selection_Mix4,selection_Mix5))
+res_diverse <- data.frame(res_Mix1[selection_diverse,"log2FoldChange"],
+                          res_Mix2[selection_diverse,"log2FoldChange"],
+                          res_Mix3[selection_diverse,"log2FoldChange"],
+                          res_Mix4[selection_diverse,"log2FoldChange"],
+                          res_Mix5[selection_diverse,"log2FoldChange"])
+colnames(res_diverse) <-c("Mix1","Mix2","Mix3","Mix4","Mix5")
+
+###up
+selection_high_up <-unique(c(selection_Nit_up,selection_Sul_up,selection_Mix_up))
+res_high_up <- data.frame(res_Nit[selection_high_up,"log2FoldChange"],
+                       res_Sul[selection_high_up,"log2FoldChange"],
+                       res_Mix[selection_high_up,"log2FoldChange"])
+colnames(res_high_up)<-c('Nit','Sul','Mix')
+
+selection_diverse_up <-unique(c(selection_Mix4_up,selection_Mix5_up))
+res_diverse_up <- data.frame(res_Mix1[selection_diverse_up,"log2FoldChange"],
+                          res_Mix2[selection_diverse_up,"log2FoldChange"],
+                          res_Mix3[selection_diverse_up,"log2FoldChange"],
+                          res_Mix4[selection_diverse_up,"log2FoldChange"],
+                          res_Mix5[selection_diverse_up,"log2FoldChange"])
+colnames(res_diverse_up) <-c("Mix1","Mix2","Mix3","Mix4","Mix5")
+
+###dw
+selection_high_dw <-unique(c(selection_Nit_dw,selection_Sul_dw,selection_Mix_dw))
+res_high_dw <- data.frame(res_Nit[selection_high_dw,"log2FoldChange"],
+                       res_Sul[selection_high_dw,"log2FoldChange"],
+                       res_Mix[selection_high_dw,"log2FoldChange"])
+colnames(res_high_dw)<-c('Nit','Sul','Mix')
+
+selection_diverse_dw <-unique(c(selection_Mix4_dw,selection_Mix5_dw))
+res_diverse_dw <- data.frame(res_Mix1[selection_diverse_dw,"log2FoldChange"],
+                          res_Mix2[selection_diverse_dw,"log2FoldChange"],
+                          res_Mix3[selection_diverse_dw,"log2FoldChange"],
+                          res_Mix4[selection_diverse_dw,"log2FoldChange"],
+                          res_Mix5[selection_diverse_dw,"log2FoldChange"])
+colnames(res_diverse_dw) <-c("Mix1","Mix2","Mix3","Mix4","Mix5")
+```
+
+###ViSEAGO analysis
+#####Create topGOdata
+```{r}
+ont="BP"
+# BP_Nit_up<-ViSEAGO::create_topGOdata(
+#         geneSel = selection_Nit_up,
+#         allGenes = background_high,
+#         gene2GO = myGENE2GO,
+#         ont=ont,
+#         nodeSize = 5
+# )
+# BP_Nit_dw<-ViSEAGO::create_topGOdata(
+#         geneSel = selection_Nit_dw,
+#         allGenes = background_high,
+#         gene2GO = myGENE2GO,
+#         ont=ont,
+#         nodeSize = 5
+# )
+BP_Nit<-ViSEAGO::create_topGOdata(
+        geneSel = selection_Nit,
+        allGenes = background_high,
+        gene2GO = myGENE2GO,
+        ont=ont,
+        nodeSize = 5
+)
+# BP_Sul_up<-ViSEAGO::create_topGOdata(
+#         geneSel = selection_Sul_up,
+#         allGenes = background_high,
+#         gene2GO = myGENE2GO,
+#         ont=ont,
+#         nodeSize = 5
+# )
+# BP_Sul_dw<-ViSEAGO::create_topGOdata(
+#         geneSel = selection_Sul_dw,
+#         allGenes = background_high,
+#         gene2GO = myGENE2GO,
+#         ont=ont,
+#         nodeSize = 5
+# )
+BP_Sul<-ViSEAGO::create_topGOdata(
+        geneSel = selection_Sul,
+        allGenes = background_high,
+        gene2GO = myGENE2GO,
+        ont=ont,
+        nodeSize = 5
+)
+# BP_Mix_up<-ViSEAGO::create_topGOdata(
+#         geneSel = selection_Mix_up,
+#         allGenes = background_high,
+#         gene2GO = myGENE2GO,
+#         ont=ont,
+#         nodeSize = 5
+# )
+# BP_Mix_dw<-ViSEAGO::create_topGOdata(
+#         geneSel = selection_Mix_dw,
+#         allGenes = background_high,
+#         gene2GO = myGENE2GO,
+#         ont=ont,
+#         nodeSize = 5
+# )
+BP_Mix<-ViSEAGO::create_topGOdata(
+        geneSel = selection_Mix,
+        allGenes = background_high,
+        gene2GO = myGENE2GO,
+        ont=ont,
+        nodeSize = 5
+)
+# BP_Mix1<-ViSEAGO::create_topGOdata(
+#         geneSel = selection_Mix1,
+#         allGenes = background_diverse,
+#         gene2GO = myGENE2GO,
+#         ont=ont,
+#         nodeSize = 5
+# )
+# BP_Mix2_up<-ViSEAGO::create_topGOdata(
+#         geneSel = selection_Mix2_up,
+#         allGenes = background_diverse,
+#         gene2GO = myGENE2GO,
+#         ont=ont,
+#         nodeSize = 5
+# )
+# BP_Mix2<-ViSEAGO::create_topGOdata(
+#         geneSel = selection_Mix2,
+#         allGenes = background_diverse,
+#         gene2GO = myGENE2GO,
+#         ont=ont,
+#         nodeSize = 5
+# )
+# BP_Mix3<-ViSEAGO::create_topGOdata(
+#         geneSel = selection_Mix3,
+#         allGenes = background_diverse,
+#         gene2GO = myGENE2GO,
+#         ont=ont,
+#         nodeSize = 5
+# )
+# BP_Mix4_up<-ViSEAGO::create_topGOdata(
+#         geneSel = selection_Mix4_up,
+#         allGenes = background_diverse,
+#         gene2GO = myGENE2GO,
+#         ont=ont,
+#         nodeSize = 5
+# )
+# BP_Mix4_dw<-ViSEAGO::create_topGOdata(
+#         geneSel = selection_Mix4_dw,
+#         allGenes = background_diverse,
+#         gene2GO = myGENE2GO,
+#         ont=ont,
+#         nodeSize = 5
+# )
+BP_Mix4<-ViSEAGO::create_topGOdata(
+        geneSel = selection_Mix4,
+        allGenes = background_diverse,
+        gene2GO = myGENE2GO,
+        ont=ont,
+        nodeSize = 5
+)
+# BP_Mix5_up<-ViSEAGO::create_topGOdata(
+#         geneSel = selection_Mix5_up,
+#         allGenes = background_diverse,
+#         gene2GO = myGENE2GO,
+#         ont=ont,
+#         nodeSize = 5
+# )
+# BP_Mix5_dw<-ViSEAGO::create_topGOdata(
+#         geneSel = selection_Mix5_dw,
+#         allGenes = background_diverse,
+#         gene2GO = myGENE2GO,
+#         ont=ont,
+#         nodeSize = 5
+# )
+BP_Mix5<-ViSEAGO::create_topGOdata(
+        geneSel = selection_Mix5,
+        allGenes = background_diverse,
+        gene2GO = myGENE2GO,
+        ont=ont,
+        nodeSize = 5
+)
+# BP_Mix6<-ViSEAGO::create_topGOdata(
+#         geneSel = selection_Mix6,
+#         allGenes = background_diverse,
+#         gene2GO = myGENE2GO,
+#         ont=ont,
+#         nodeSize = 5
+# )
+```
+#####perform TopGO tests
+```{r}
+algorithm <-'weight01'
+statistic <- 'fisher'
+# classic_BP_Nit_up<-topGO::runTest(
+#         BP_Nit_up,
+#         algorithm=algorithm,
+#         statistic = statistic
+# )
+# classic_BP_Nit_dw<-topGO::runTest(
+#         BP_Nit_dw,
+#         algorithm=algorithm,
+#         statistic = statistic
+# )
+classic_BP_Nit<-topGO::runTest(
+        BP_Nit,
+        algorithm=algorithm,
+        statistic = statistic
+)
+# classic_BP_Sul_up<-topGO::runTest(
+#         BP_Sul_up,
+#         algorithm=algorithm,
+#         statistic = statistic
+# )
+# classic_BP_Sul_dw<-topGO::runTest(
+#         BP_Sul_dw,
+#         algorithm=algorithm,
+#         statistic = statistic
+# )
+classic_BP_Sul<-topGO::runTest(
+        BP_Sul,
+        algorithm=algorithm,
+        statistic = statistic
+)
+# classic_BP_Mix_up<-topGO::runTest(
+#         BP_Mix_up,
+#         algorithm=algorithm,
+#         statistic = statistic
+# )
+# classic_BP_Mix_dw<-topGO::runTest(
+#         BP_Mix_dw,
+#         algorithm=algorithm,
+#         statistic = statistic
+# )
+classic_BP_Mix<-topGO::runTest(
+        BP_Mix,
+        algorithm=algorithm,
+        statistic = statistic
+)
+# classic_BP_Mix1<-topGO::runTest(
+#         BP_Mix1,
+#         algorithm=algorithm,
+#         statistic = statistic
+# )
+# classic_BP_Mix2_up<-topGO::runTest(
+#         BP_Mix2_up,
+#         algorithm=algorithm,
+#         statistic = statistic
+# )
+# classic_BP_Mix2<-topGO::runTest(
+#         BP_Mix2,
+#         algorithm=algorithm,
+#         statistic = statistic
+# )
+# classic_BP_Mix3<-topGO::runTest(
+#         BP_Mix3,
+#         algorithm=algorithm,
+#         statistic = statistic
+# )
+# classic_BP_Mix4_up<-topGO::runTest(
+#         BP_Mix4_up,
+#         algorithm=algorithm,
+#         statistic = statistic
+# )
+# classic_BP_Mix4_dw<-topGO::runTest(
+#         BP_Mix4_dw,
+#         algorithm=algorithm,
+#         statistic = statistic
+# )
+classic_BP_Mix4<-topGO::runTest(
+        BP_Mix4,
+        algorithm=algorithm,
+        statistic = statistic
+)
+# classic_BP_Mix5_up<-topGO::runTest(
+#         BP_Mix5_up,
+#         algorithm=algorithm,
+#         statistic = statistic
+# )
+# classic_BP_Mix5_dw<-topGO::runTest(
+#         BP_Mix5_dw,
+#         algorithm=algorithm,
+#         statistic = statistic
+# )
+classic_BP_Mix5<-topGO::runTest(
+        BP_Mix5,
+        algorithm=algorithm,
+        statistic = statistic
+)
+# classic_BP_Mix6<-topGO::runTest(
+#         BP_Mix6,
+#         algorithm=algorithm,
+#         statistic = statistic
+# )
+```
+#####merge topGO results
+```{r}
+# BP_sResults_high_up<-ViSEAGO::merge_enrich_terms(
+#         cutoff = 0.001,
+#         Input=list(
+#                 Nit=c("BP_Nit_up","classic_BP_Nit_up"),
+#                 Sul=c("BP_Sul_up","classic_BP_Sul_up"),
+#                 Mix=c("BP_Mix_up","classic_BP_Mix_up")
+#         ),
+#         
+# )
+# BP_sResults_high_dw<-ViSEAGO::merge_enrich_terms(
+#         cutoff = 0.001,
+#         Input=list(
+#                 Nit=c("BP_Nit_dw","classic_BP_Nit_dw"),
+#                 Sul=c("BP_Sul_dw","classic_BP_Sul_dw"),
+#                 Mix=c("BP_Mix_dw","classic_BP_Mix_dw")
+#         ),
+#         
+# )
+BP_sResults_high<-ViSEAGO::merge_enrich_terms(
+        cutoff = 0.001,
+        Input=list(
+                Nit=c("BP_Nit","classic_BP_Nit"),
+                Sul=c("BP_Sul","classic_BP_Sul"),
+                Mix=c("BP_Mix","classic_BP_Mix")
+        ),
+        
+)
+# BP_sResults_diverse_up<-ViSEAGO::merge_enrich_terms(
+#         cutoff = 0.01,
+#         Input=list(
+#                 Mix4=c("BP_Mix4_up","classic_BP_Mix4_up"),
+#                 Mix5=c("BP_Mix5_up","classic_BP_Mix5_up")
+#         ),
+#         
+# )
+# BP_sResults_diverse_dw<-ViSEAGO::merge_enrich_terms(
+#         cutoff = 0.01,
+#         Input=list(
+#                 Mix4=c("BP_Mix4_dw","classic_BP_Mix4_dw"),
+#                 Mix5=c("BP_Mix5_dw","classic_BP_Mix5_dw")
+#         ),
+#         
+# )
+BP_sResults_diverse<-ViSEAGO::merge_enrich_terms(
+        cutoff = 0.01,
+        Input=list(
+                Mix4=c("BP_Mix4","classic_BP_Mix4"),
+                Mix5=c("BP_Mix5","classic_BP_Mix5")
+        ),
+        
+)
+```
+#####build_GO_SS
+```{r}
+# #high_up
+# ##build_GO_SS
+# myGOs_high_up<-ViSEAGO::build_GO_SS(
+#     gene2GO=myGENE2GO,
+#     enrich_GO_terms=BP_sResults_high_up
+# )
+# ##compute_SS_distance
+# myGOs_high_up<-ViSEAGO::compute_SS_distances(
+#     myGOs_high_up,
+#     distance=c("Resnik","Rel","Lin","Jiang","Wang")
+# )
+# ##GOterms_heatmap
+# high_up_Wang_clusters_wardD2<-ViSEAGO::GOterms_heatmap(
+#     myGOs_high_up,
+#     showIC=F,
+#     showGOlabels=TRUE,
+#     GO.tree=list(
+#         tree=list(
+#             distance="Wang",
+#             aggreg.method="ward.D2"
+#         ),
+#         cut=list(
+#             dynamic=list(
+#                 pamStage=TRUE,
+#                 pamRespectsDendro=TRUE,
+#                 deepSplit=0,
+#                 minClusterSize =2
+#             )
+#         )
+#     ),
+#     samples.tree=NULL
+# )
+# ##calculate semantic similarites between clusters of GO terms
+# high_up_Wang_clusters_wardD2<-ViSEAGO::compute_SS_distances(
+#     high_up_Wang_clusters_wardD2,
+#     distance=c("max", "avg","rcmax", "BMA")
+# )
+# ##GOclusters heatmap
+# high_up_Wang_clusters_wardD2<-ViSEAGO::GOclusters_heatmap(
+#     high_up_Wang_clusters_wardD2,
+#     tree=list(
+#         distance="BMA",
+#         aggreg.method="ward.D2"
+#     )
+# )
+# 
+# #high_dw
+# ##build_GO_SS
+# myGOs_high_dw<-ViSEAGO::build_GO_SS(
+#     gene2GO=myGENE2GO,
+#     enrich_GO_terms=BP_sResults_high_dw
+# )
+# ##compute_SS_distance
+# myGOs_high_dw<-ViSEAGO::compute_SS_distances(
+#     myGOs_high_dw,
+#     distance=c("Resnik","Rel","Lin","Jiang","Wang")
+# )
+# ##GOterms_heatmap
+# high_dw_Wang_clusters_wardD2<-ViSEAGO::GOterms_heatmap(
+#     myGOs_high_dw,
+#     showIC=F,
+#     showGOlabels=TRUE,
+#     GO.tree=list(
+#         tree=list(
+#             distance="Wang",
+#             aggreg.method="ward.D2"
+#         ),
+#         cut=list(
+#             dynamic=list(
+#                 pamStage=TRUE,
+#                 pamRespectsDendro=TRUE,
+#                 deepSplit=0,
+#                 minClusterSize =2
+#             )
+#         )
+#     ),
+#     samples.tree=NULL
+# )
+# ##calculate semantic similarites between clusters of GO terms
+# high_dw_Wang_clusters_wardD2<-ViSEAGO::compute_SS_distances(
+#     high_dw_Wang_clusters_wardD2,
+#     distance=c("max", "avg","rcmax", "BMA")
+# )
+# ##GOclusters heatmap
+# high_dw_Wang_clusters_wardD2<-ViSEAGO::GOclusters_heatmap(
+#     high_dw_Wang_clusters_wardD2,
+#     tree=list(
+#         distance="BMA",
+#         aggreg.method="ward.D2"
+#     )
+# )
+
+#high
+##build_GO_SS
+myGOs_high<-ViSEAGO::build_GO_SS(
+    gene2GO=myGENE2GO,
+    enrich_GO_terms=BP_sResults_high
+)
+##compute_SS_distance
+myGOs_high<-ViSEAGO::compute_SS_distances(
+    myGOs_high,
+    distance=c("Resnik","Rel","Lin","Jiang","Wang")
+)
+##GOterms_heatmap
+high_Wang_clusters_wardD2<-ViSEAGO::GOterms_heatmap(
+    myGOs_high,
+    showIC=F,
+    showGOlabels=TRUE,
+    GO.tree=list(
+        tree=list(
+            distance="Wang",
+            aggreg.method="ward.D2"
+        ),
+        cut=list(
+            dynamic=list(
+                pamStage=TRUE,
+                pamRespectsDendro=TRUE,
+                deepSplit=0,
+                minClusterSize =2
+            )
+        )
+    ),
+    samples.tree=NULL
+)
+##calculate semantic similarites between clusters of GO terms
+high_Wang_clusters_wardD2<-ViSEAGO::compute_SS_distances(
+    high_Wang_clusters_wardD2,
+    distance=c("max", "avg","rcmax", "BMA")
+)
+##GOclusters heatmap
+high_Wang_clusters_wardD2<-ViSEAGO::GOclusters_heatmap(
+    high_Wang_clusters_wardD2,
+    tree=list(
+        distance="BMA",
+        aggreg.method="ward.D2"
+    )
+)
+
+
+# #diverse_up
+# ##build_GO_SS
+# myGOs_diverse_up<-ViSEAGO::build_GO_SS(
+#     gene2GO=myGENE2GO,
+#     enrich_GO_terms=BP_sResults_diverse_up
+# )
+# ##compute_SS_distance
+# myGOs_diverse_up<-ViSEAGO::compute_SS_distances(
+#     myGOs_diverse_up,
+#     distance=c("Resnik","Rel","Lin","Jiang","Wang")
+# )
+# ##GOterms_heatmap
+# diverse_up_Wang_clusters_wardD2<-ViSEAGO::GOterms_heatmap(
+#     myGOs_diverse_up,
+#     showIC=F,
+#     showGOlabels=TRUE,
+#     GO.tree=list(
+#         tree=list(
+#             distance="Wang",
+#             aggreg.method="ward.D2"
+#         ),
+#         cut=list(
+#             dynamic=list(
+#                 pamStage=TRUE,
+#                 pamRespectsDendro=TRUE,
+#                 deepSplit=0,
+#                 minClusterSize =2
+#             )
+#         )
+#     ),
+#     samples.tree=NULL
+# )
+# ##calculate semantic similarites between clusters of GO terms
+# diverse_up_Wang_clusters_wardD2<-ViSEAGO::compute_SS_distances(
+#     diverse_up_Wang_clusters_wardD2,
+#     distance=c("max", "avg","rcmax", "BMA")
+# )
+# ##GOclusters heatmap
+# diverse_up_Wang_clusters_wardD2<-ViSEAGO::GOclusters_heatmap(
+#     diverse_up_Wang_clusters_wardD2,
+#     tree=list(
+#         distance="BMA",
+#         aggreg.method="ward.D2"
+#     )
+# )
+# #diverse_dw
+# ##build_GO_SS
+# myGOs_diverse_dw<-ViSEAGO::build_GO_SS(
+#     gene2GO=myGENE2GO,
+#     enrich_GO_terms=BP_sResults_diverse_dw
+# )
+# ##compute_SS_distance
+# myGOs_diverse_dw<-ViSEAGO::compute_SS_distances(
+#     myGOs_diverse_dw,
+#     distance=c("Resnik","Rel","Lin","Jiang","Wang")
+# )
+# ##GOterms_heatmap
+# diverse_dw_Wang_clusters_wardD2<-ViSEAGO::GOterms_heatmap(
+#     myGOs_diverse_dw,
+#     showIC=F,
+#     showGOlabels=TRUE,
+#     GO.tree=list(
+#         tree=list(
+#             distance="Wang",
+#             aggreg.method="ward.D2"
+#         ),
+#         cut=list(
+#             dynamic=list(
+#                 pamStage=TRUE,
+#                 pamRespectsDendro=TRUE,
+#                 deepSplit=0,
+#                 minClusterSize =2
+#             )
+#         )
+#     ),
+#     samples.tree=NULL
+# )
+# ##calculate semantic similarites between clusters of GO terms
+# diverse_dw_Wang_clusters_wardD2<-ViSEAGO::compute_SS_distances(
+#     diverse_dw_Wang_clusters_wardD2,
+#     distance=c("max", "avg","rcmax", "BMA")
+# )
+# ##GOclusters heatmap
+# diverse_dw_Wang_clusters_wardD2<-ViSEAGO::GOclusters_heatmap(
+#     diverse_dw_Wang_clusters_wardD2,
+#     tree=list(
+#         distance="BMA",
+#         aggreg.method="ward.D2"
+#     )
+# )
+#diverse
+##build_GO_SS
+myGOs_diverse<-ViSEAGO::build_GO_SS(
+    gene2GO=myGENE2GO,
+    enrich_GO_terms=BP_sResults_diverse
+)
+##compute_SS_distance
+myGOs_diverse<-ViSEAGO::compute_SS_distances(
+    myGOs_diverse,
+    distance=c("Resnik","Rel","Lin","Jiang","Wang")
+)
+##GOterms_heatmap
+diverse_Wang_clusters_wardD2<-ViSEAGO::GOterms_heatmap(
+    myGOs_diverse,
+    showIC=F,
+    showGOlabels=TRUE,
+    GO.tree=list(
+        tree=list(
+            distance="Wang",
+            aggreg.method="ward.D2"
+        ),
+        cut=list(
+            dynamic=list(
+                pamStage=TRUE,
+                pamRespectsDendro=TRUE,
+                deepSplit=0,
+                minClusterSize =2
+            )
+        )
+    ),
+    samples.tree=NULL
+)
+##calculate semantic similarites between clusters of GO terms
+diverse_Wang_clusters_wardD2<-ViSEAGO::compute_SS_distances(
+    diverse_Wang_clusters_wardD2,
+    distance=c("max", "avg","rcmax", "BMA")
+)
+##GOclusters heatmap
+diverse_Wang_clusters_wardD2<-ViSEAGO::GOclusters_heatmap(
+    diverse_Wang_clusters_wardD2,
+    tree=list(
+        distance="BMA",
+        aggreg.method="ward.D2"
+    )
+)
+```
+#Analysis_mouse
+###Construct DESeq2 object
+```{r}
+colnames_mouse=c('Con-1','Con-3','Exp-1','Exp-3')
+
+#combine featureCounts tables
+counts_mouse=as.data.frame(PM_featureCounts_mouse$counts)
+counts_mouse$gene_id <-rownames(counts_mouse)
+counts_mouse=counts_mouse[!grepl('PAR_Y',counts_mouse$gene_id),]
+rownames(counts_mouse)=substr(rownames(counts_mouse),1,18)
+counts_mouse<-counts_mouse[c(-ncol(counts_mouse))]
+colnames(counts_mouse)=colnames_mouse
+
+
+#pre-filtering of low-counted genes
+counts_mouse[counts_mouse==0]<-NA
+counts_mouse=na.omit(counts_mouse)
+keep_mouse <- rowSums(counts_mouse) >= 0
+counts_mouse <- counts_mouse[keep_mouse,]
+
+#Set DESeq2 object
+##mouse
+samples_mouse_list=c('Con-1','Con-3','Exp-1','Exp-3')
+samples_mouse = as.data.frame(samples_mouse_list)
+counts_mouse<-counts_mouse[,samples_mouse_list]
+samples_mouse$condition<-factor(rep(c("Con","Exp"),each=2))
+dds_mouse<-DESeqDataSetFromMatrix(countData = counts_mouse,
+                           colData = samples_mouse,
+                           design = ~condition)
+dds_mouse<-DESeq(dds_mouse)
+```
+###Set biomaRt
+mouse BiomaRt: Ensembl id to gene symbol
+```{r}
+mouse_mart = useDataset("mmusculus_gene_ensembl",useMart("ensembl"))
+mouse_G_symbol_list = getBM(filters='ensembl_gene_id',attributes = c('ensembl_gene_id','mgi_symbol'),
+                     values=rownames(counts_mouse),mart = mouse_mart,useCache=F)
+mouse_G_entrezid_list = getBM(filters='ensembl_gene_id',attributes = c('ensembl_gene_id','entrezgene_id'),
+                     values=rownames(counts_mouse),mart = mouse_mart,useCache=F)
+```
+###Find DEGs
+```{r}
+#Find DEGs
+res_mouse <- results(dds_mouse,contrast=c("condition","Exp","Con"))
+
+#res_mouse<-lfcShrink(dds_mouse,coef="condition_Exp_vs_Con",type='apeglm')
+
+#filter significant genes
+fc_threshold_mouse = 1
+pval_threshold_mouse = 0.1
+
+res_mouse$pvalue[is.na(res_mouse$pvalue)]<-1
+
+res_mouse_sig_up = res_mouse[((res_mouse$log2FoldChange)>fc_threshold_mouse) & res_mouse$pvalue<pval_threshold_mouse,]
+res_mouse_sig_dw = res_mouse[((res_mouse$log2FoldChange)< -fc_threshold_mouse) & res_mouse$pvalue<pval_threshold_mouse,]
+res_mouse_sig = res_mouse[(abs(res_mouse$log2FoldChange)>fc_threshold_mouse) & res_mouse$pvalue<pval_threshold_mouse,]
+
+selection_mouse_up  = rownames(res_mouse_sig_up)
+selection_mouse_dw  = rownames(res_mouse_sig_dw)
+selection_mouse     = rownames(res_mouse_sig)
+
+#Set background genes
+background_mouse <-unique(c(rownames(res_mouse)))
+```
+
+###ViSEAGO analysis
+#####Create topGOdata
+```{r}
+ont="BP"
+# BP_mouse_up<-ViSEAGO::create_topGOdata(
+#         geneSel = selection_mouse_up,
+#         allGenes = background_mouse,
+#         gene2GO = myGENE2GO_mouse,
+#         ont=ont,
+#         nodeSize = 5
+# )
+# BP_mouse_dw<-ViSEAGO::create_topGOdata(
+#         geneSel = selection_mouse_dw,
+#         allGenes = background_mouse,
+#         gene2GO = myGENE2GO_mouse,
+#         ont=ont,
+#         nodeSize = 5
+# )
+BP_mouse<-ViSEAGO::create_topGOdata(
+        geneSel = selection_mouse,
+        allGenes = background_mouse,
+        gene2GO = myGENE2GO_mouse,
+        ont=ont,
+        nodeSize = 5
+)
+```
+#####perform TopGO tests
+```{r}
+algorithm <-'weight01'
+statistic <- 'fisher'
+# classic_BP_mouse_up<-topGO::runTest(
+#         BP_mouse_up,
+#         algorithm=algorithm,
+#         statistic = statistic
+# )
+# classic_BP_mouse_dw<-topGO::runTest(
+#         BP_mouse_dw,
+#         algorithm=algorithm,
+#         statistic = statistic
+# )
+classic_BP_mouse<-topGO::runTest(
+        BP_mouse,
+        algorithm=algorithm,
+        statistic = statistic
+)
+```
+#####merge topGO results
+```{r}
+
+# BP_sResults_mouse_up<-ViSEAGO::merge_enrich_terms(
+#         cutoff = 0.05,
+#         Input=list(
+#                 mouse=c("BP_mouse_up","classic_BP_mouse_up")
+#         ),
+#         
+# )
+# BP_sResults_mouse_dw<-ViSEAGO::merge_enrich_terms(
+#         cutoff = 0.05,
+#         Input=list(
+#                 mouse=c("BP_mouse_dw","classic_BP_mouse_dw")
+#         ),
+#         
+# )
+BP_sResults_mouse<-ViSEAGO::merge_enrich_terms(
+        cutoff = 0.05,
+        Input=list(
+                mouse=c("BP_mouse","classic_BP_mouse")
+        ),
+        
+)
+```
+
+#####build_GO_SS
+```{r}
+# #mouse_up
+# ##build_GO_SS
+# myGOs_mouse_up<-ViSEAGO::build_GO_SS(
+#     gene2GO=myGENE2GO_mouse,
+#     enrich_GO_terms=BP_sResults_mouse_up
+# )
+# ##compute_SS_distance
+# myGOs_mouse_up<-ViSEAGO::compute_SS_distances(
+#     myGOs_mouse_up,
+#     distance=c("Resnik","Rel","Lin","Jiang","Wang")
+# )
+# ##GOterms_heatmap
+# mouse_up_Wang_clusters_wardD2<-ViSEAGO::GOterms_heatmap(
+#     myGOs_mouse_up,
+#     showIC=F,
+#     showGOlabels=TRUE,
+#     GO.tree=list(
+#         tree=list(
+#             distance="Wang",
+#             aggreg.method="ward.D2"
+#         ),
+#         cut=list(
+#             dynamic=list(
+#                 pamStage=TRUE,
+#                 pamRespectsDendro=TRUE,
+#                 deepSplit=0,
+#                 minClusterSize =2
+#             )
+#         )
+#     ),
+#     samples.tree=NULL
+# )
+# ##calculate semantic similarites between clusters of GO terms
+# mouse_up_Wang_clusters_wardD2<-ViSEAGO::compute_SS_distances(
+#     mouse_up_Wang_clusters_wardD2,
+#     distance=c("max", "avg","rcmax", "BMA")
+# )
+# ##GOclusters heatmap
+# mouse_up_Wang_clusters_wardD2<-ViSEAGO::GOclusters_heatmap(
+#     mouse_up_Wang_clusters_wardD2,
+#     tree=list(
+#         distance="BMA",
+#         aggreg.method="ward.D2"
+#     )
+# )
+# 
+# #mouse_dw
+# ##build_GO_SS
+# myGOs_mouse_dw<-ViSEAGO::build_GO_SS(
+#     gene2GO=myGENE2GO_mouse,
+#     enrich_GO_terms=BP_sResults_mouse_dw
+# )
+# ##compute_SS_distance
+# myGOs_mouse_dw<-ViSEAGO::compute_SS_distances(
+#     myGOs_mouse_dw,
+#     distance=c("Resnik","Rel","Lin","Jiang","Wang")
+# )
+# ##GOterms_heatmap
+# mouse_dw_Wang_clusters_wardD2<-ViSEAGO::GOterms_heatmap(
+#     myGOs_mouse_dw,
+#     showIC=F,
+#     showGOlabels=TRUE,
+#     GO.tree=list(
+#         tree=list(
+#             distance="Wang",
+#             aggreg.method="ward.D2"
+#         ),
+#         cut=list(
+#             dynamic=list(
+#                 pamStage=TRUE,
+#                 pamRespectsDendro=TRUE,
+#                 deepSplit=0,
+#                 minClusterSize =2
+#             )
+#         )
+#     ),
+#     samples.tree=NULL
+# )
+# ##calculate semantic similarites between clusters of GO terms
+# mouse_dw_Wang_clusters_wardD2<-ViSEAGO::compute_SS_distances(
+#     mouse_dw_Wang_clusters_wardD2,
+#     distance=c("max", "avg","rcmax", "BMA")
+# )
+# ##GOclusters heatmap
+# mouse_dw_Wang_clusters_wardD2<-ViSEAGO::GOclusters_heatmap(
+#     mouse_dw_Wang_clusters_wardD2,
+#     tree=list(
+#         distance="BMA",
+#         aggreg.method="ward.D2"
+#     )
+# )
+
+#mouse
+##build_GO_SS
+myGOs_mouse<-ViSEAGO::build_GO_SS(
+    gene2GO=myGENE2GO_mouse,
+    enrich_GO_terms=BP_sResults_mouse
+)
+##compute_SS_distance
+myGOs_mouse<-ViSEAGO::compute_SS_distances(
+    myGOs_mouse,
+    distance=c("Resnik","Rel","Lin","Jiang","Wang")
+)
+##GOterms_heatmap
+mouse_Wang_clusters_wardD2<-ViSEAGO::GOterms_heatmap(
+    myGOs_mouse,
+    showIC=F,
+    showGOlabels=TRUE,
+    GO.tree=list(
+        tree=list(
+            distance="Wang",
+            aggreg.method="ward.D2"
+        ),
+        cut=list(
+            dynamic=list(
+                pamStage=TRUE,
+                pamRespectsDendro=TRUE,
+                deepSplit=0,
+                minClusterSize =2
+            )
+        )
+    ),
+    samples.tree=NULL
+)
+##calculate semantic similarites between clusters of GO terms
+mouse_Wang_clusters_wardD2<-ViSEAGO::compute_SS_distances(
+    mouse_Wang_clusters_wardD2,
+    distance=c("max", "avg","rcmax", "BMA")
+)
+##GOclusters heatmap
+mouse_Wang_clusters_wardD2<-ViSEAGO::GOclusters_heatmap(
+    mouse_Wang_clusters_wardD2,
+    tree=list(
+        distance="BMA",
+        aggreg.method="ward.D2"
+    )
+)
+```
+#Analysis_A549_comp
+###Construct DESeq2 object
+```{r}
+colnames_comp=c('NC-1','NC-2','NC-3','0-1','0-2','0-3','50-1','50-2','50-3','100-1','100-2','100-3','150-1','150-2','150-3','200-1','200-2','200-3')
+
+#combine featureCounts tables
+counts_comp=as.data.frame(PM_featureCounts_comp$counts)
+counts_comp$gene_id <-rownames(counts_comp)
+counts_comp=counts_comp[!grepl('PAR_Y',counts_comp$gene_id),]
+rownames(counts_comp)=substr(rownames(counts_comp),1,15)
+counts_comp<-counts_comp[c(-ncol(counts_comp))]
+colnames(counts_comp)=colnames_comp
+
+#pre-filtering of low-counted genes
+counts_comp[counts_comp==0]<-NA
+counts_comp=na.omit(counts_comp)
+keep_comp <- rowSums(counts_comp) >= 0
+counts_comp <- counts_comp[keep_comp,]
+
+#Set DESeq2 object
+##comp
+samples_comp_list=c('NC-1','NC-2','NC-3','0-1','0-2','0-3','50-1','50-2','50-3','100-1','100-2','100-3','150-1','150-2','150-3','200-1','200-2','200-3')
+
+#samples_comp_list=c('NC-2','NC-3','0-1','0-3','50-1','50-3','100-1','100-3','150-2','150-3','200-1','200-3')
+samples_comp = as.data.frame(samples_comp_list)
+counts_comp<-counts_comp[,samples_comp_list]
+samples_comp$condition<-factor(rep(c("aNC","n000","n050","n100","n150","n200"),each=3))
+dds_comp<-DESeqDataSetFromMatrix(countData = counts_comp,
+                           colData = samples_comp,
+                           design = ~condition)
+dds_comp<-DESeq(dds_comp)
+```
+
+```{r}
+rld = assay(rlog(dds_comp,blind=F))
+select = order(rowMeans(counts(dds_comp,normalized=T)),decreasing=T)
+
+df = as.data.frame(colData(dds_comp)[,c("condition")])
+rownames(df) = colnames(dds_comp)
+colnames(df) = c("colData")
+
+sampleDists <- dist(t(rld[select,]))
+
+pheatmap(as.matrix(sampleDists),
+         clustering_distance_rows=sampleDists,
+         clustering_distance_cols=sampleDists,
+         cluster_rows = F,
+         cluster_cols = F,
+         annotation_col=df)
+```
+
+###Set biomaRt
+human BiomaRt: Ensembl id to gene symbol or entrezid
+```{r}
+human_mart = useDataset("hsapiens_gene_ensembl",useMart("ensembl"))
+human_G_symbol_list = getBM(filters='ensembl_gene_id',attributes = c('ensembl_gene_id','hgnc_symbol'),
+                     values=rownames(counts_comp),mart = human_mart,useCache=F)
+human_G_entrezid_list = getBM(filters='ensembl_gene_id',attributes = c('ensembl_gene_id','entrezgene_id'),
+                     values=rownames(counts_comp),mart = human_mart,useCache=F)
+```
+###Find DEGs
+```{r}
+# res_000<-lfcShrink(dds_comp,coef="condition_n000_vs_aNC",type='apeglm')
+# res_050<-lfcShrink(dds_comp,coef="condition_n050_vs_aNC",type='apeglm')
+# res_100<-lfcShrink(dds_comp,coef="condition_n100_vs_aNC",type='apeglm')
+# res_150<-lfcShrink(dds_comp,coef="condition_n150_vs_aNC",type='apeglm')
+# res_200<-lfcShrink(dds_comp,coef="condition_n200_vs_aNC",type='apeglm')
+
+res_000 <- results(dds_comp,contrast=c("condition","n000","aNC"))
+res_050 <- results(dds_comp,contrast=c("condition","n050","aNC"))
+res_100 <- results(dds_comp,contrast=c("condition","n100","aNC"))
+res_150 <- results(dds_comp,contrast=c("condition","n150","aNC"))
+res_200 <- results(dds_comp,contrast=c("condition","n200","aNC"))
+
+res_000$pvalue[is.na(res_000$pvalue)]<-1
+res_050$pvalue[is.na(res_050$pvalue)]<-1
+res_100$pvalue[is.na(res_100$pvalue)]<-1
+res_150$pvalue[is.na(res_150$pvalue)]<-1
+res_200$pvalue[is.na(res_200$pvalue)]<-1
+
+#filter significant genes
+fc_threshold_comp = 1
+pval_threshold_comp = 0.05
+
+res_000_sig_up  = res_000[((res_000$log2FoldChange)>fc_threshold_comp) & res_000$pvalue<pval_threshold_comp,]
+res_000_sig_dw  = res_000[((res_000$log2FoldChange)< -fc_threshold_comp) & res_000$pvalue<pval_threshold_comp,]
+res_000_sig     = res_000[(abs(res_000$log2FoldChange)>fc_threshold_comp) & res_000$pvalue<pval_threshold_comp,]
+res_050_sig_up  = res_050[((res_050$log2FoldChange)>fc_threshold_comp) & res_050$pvalue<pval_threshold_comp,]
+res_050_sig_dw  = res_050[((res_050$log2FoldChange)< -fc_threshold_comp) & res_050$pvalue<pval_threshold_comp,]
+res_050_sig     = res_050[(abs(res_050$log2FoldChange)>fc_threshold_comp) & res_050$pvalue<pval_threshold_comp,]
+res_100_sig_up  = res_100[((res_100$log2FoldChange)>fc_threshold_comp) & res_100$pvalue<pval_threshold_comp,]
+res_100_sig_dw  = res_100[((res_100$log2FoldChange)< -fc_threshold_comp) & res_100$pvalue<pval_threshold_comp,]
+res_100_sig     = res_100[(abs(res_100$log2FoldChange)>fc_threshold_comp) & res_100$pvalue<pval_threshold_comp,]
+res_150_sig_up  = res_150[((res_150$log2FoldChange)>fc_threshold_comp) & res_150$pvalue<pval_threshold_comp,]
+res_150_sig_dw  = res_150[((res_150$log2FoldChange)< -fc_threshold_comp) & res_150$pvalue<pval_threshold_comp,]
+res_150_sig     = res_150[(abs(res_150$log2FoldChange)>fc_threshold_comp) & res_150$pvalue<pval_threshold_comp,]
+res_200_sig_up  = res_200[((res_200$log2FoldChange)>fc_threshold_comp) & res_200$pvalue<pval_threshold_comp,]
+res_200_sig_dw  = res_200[((res_200$log2FoldChange)< -fc_threshold_comp) & res_200$pvalue<pval_threshold_comp,]
+res_200_sig     = res_200[(abs(res_200$log2FoldChange)>fc_threshold_comp) & res_200$pvalue<pval_threshold_comp,]
+
+selection_000_up    = rownames(res_000_sig_up)
+selection_000_dw    = rownames(res_000_sig_dw)
+selection_000       = rownames(res_000_sig)
+selection_050_up    = rownames(res_050_sig_up)
+selection_050_dw    = rownames(res_050_sig_dw)
+selection_050       = rownames(res_050_sig)
+selection_100_up    = rownames(res_100_sig_up)
+selection_100_dw    = rownames(res_100_sig_dw)
+selection_100       = rownames(res_100_sig)
+selection_150_up    = rownames(res_150_sig_up)
+selection_150_dw    = rownames(res_150_sig_dw)
+selection_150       = rownames(res_150_sig)
+selection_200_up    = rownames(res_200_sig_up)
+selection_200_dw    = rownames(res_200_sig_dw)
+selection_200       = rownames(res_200_sig)
+
+#Set background genes
+background_comp <-unique(c(rownames(res_000),rownames(res_050),rownames(res_100),rownames(res_150),rownames(res_200)))
+
+#Combine significant genes
+selection_comp <-unique(c(selection_000,selection_050,selection_100,selection_150,selection_200))
+res_comp <- data.frame(res_000[selection_comp,"log2FoldChange"],
+                       res_050[selection_comp,"log2FoldChange"],
+                       res_100[selection_comp,"log2FoldChange"],
+                       res_150[selection_comp,"log2FoldChange"],
+                       res_200[selection_comp,"log2FoldChange"])
+colnames(res_comp)<-c('0','50','100','150','200')
+
+###up
+selection_comp_up <-unique(c(selection_000_up,selection_050_up,selection_100_up,selection_150_up,selection_200_up))
+res_comp_up <- data.frame(res_000[selection_comp_up,"log2FoldChange"],
+                        res_050[selection_comp_up,"log2FoldChange"],
+                        res_100[selection_comp_up,"log2FoldChange"],
+                        res_150[selection_comp_up,"log2FoldChange"],
+                        res_200[selection_comp_up,"log2FoldChange"])
+colnames(res_comp_up)<-c('0','50','100','150','200')
+
+###dw
+selection_comp_dw <-unique(c(selection_000_dw,selection_050_dw,selection_100_dw,selection_150_dw,selection_200_dw))
+res_comp_dw <- data.frame(res_000[selection_comp_dw,"log2FoldChange"],
+                        res_050[selection_comp_dw,"log2FoldChange"],
+                        res_100[selection_comp_dw,"log2FoldChange"],
+                        res_150[selection_comp_dw,"log2FoldChange"],
+                        res_200[selection_comp_dw,"log2FoldChange"])
+colnames(res_comp_dw)<-c('0','50','100','150','200')
+```
+
+
+###ViSEAGO analysis
+#####Create topGOdata
+```{r}
+ont="BP"
+
+BP_000<-ViSEAGO::create_topGOdata(
+        geneSel = selection_000,
+        allGenes = background_comp,
+        gene2GO = myGENE2GO,
+        ont=ont,
+        nodeSize = 5
+)
+BP_050<-ViSEAGO::create_topGOdata(
+        geneSel = selection_050,
+        allGenes = background_comp,
+        gene2GO = myGENE2GO,
+        ont=ont,
+        nodeSize = 5
+)
+BP_100<-ViSEAGO::create_topGOdata(
+        geneSel = selection_100,
+        allGenes = background_comp,
+        gene2GO = myGENE2GO,
+        ont=ont,
+        nodeSize = 5
+)
+BP_150<-ViSEAGO::create_topGOdata(
+        geneSel = selection_150,
+        allGenes = background_comp,
+        gene2GO = myGENE2GO,
+        ont=ont,
+        nodeSize = 5
+)
+BP_200<-ViSEAGO::create_topGOdata(
+        geneSel = selection_200,
+        allGenes = background_comp,
+        gene2GO = myGENE2GO,
+        ont=ont,
+        nodeSize = 5
+)
+```
+#####perform TopGO tests
+```{r}
+algorithm <-'weight01'
+statistic <- 'fisher'
+
+classic_BP_000<-topGO::runTest(
+        BP_000,
+        algorithm=algorithm,
+        statistic = statistic
+)
+classic_BP_050<-topGO::runTest(
+        BP_050,
+        algorithm=algorithm,
+        statistic = statistic
+)
+classic_BP_100<-topGO::runTest(
+        BP_100,
+        algorithm=algorithm,
+        statistic = statistic
+)
+classic_BP_150<-topGO::runTest(
+        BP_150,
+        algorithm=algorithm,
+        statistic = statistic
+)
+classic_BP_200<-topGO::runTest(
+        BP_200,
+        algorithm=algorithm,
+        statistic = statistic
+)
+
+```
+#####merge topGO results
+```{r}
+
+BP_sResults_comp<-ViSEAGO::merge_enrich_terms(
+        cutoff = 0.001,
+        Input=list(
+                n000=c("BP_000","classic_BP_000"),
+                n050=c("BP_050","classic_BP_050"),
+                n100=c("BP_100","classic_BP_100"),
+                n150=c("BP_150","classic_BP_150"),
+                n200=c("BP_200","classic_BP_200")
+        ),
+        
+)
+
+```
+#####build_GO_SS
+```{r}
+#comp
+##build_GO_SS
+myGOs_comp<-ViSEAGO::build_GO_SS(
+    gene2GO=myGENE2GO,
+    enrich_GO_terms=BP_sResults_comp
+)
+##compute_SS_distance
+myGOs_comp<-ViSEAGO::compute_SS_distances(
+    myGOs_comp,
+    distance=c("Resnik","Rel","Lin","Jiang","Wang")
+)
+##GOterms_heatmap
+comp_Wang_clusters_wardD2<-ViSEAGO::GOterms_heatmap(
+    myGOs_comp,
+    showIC=F,
+    showGOlabels=TRUE,
+    GO.tree=list(
+        tree=list(
+            distance="Wang",
+            aggreg.method="ward.D2"
+        ),
+        cut=list(
+            dynamic=list(
+                pamStage=TRUE,
+                pamRespectsDendro=TRUE,
+                deepSplit=0,
+                minClusterSize =2
+            )
+        )
+    ),
+    samples.tree=NULL
+)
+##calculate semantic similarites between clusters of GO terms
+comp_Wang_clusters_wardD2<-ViSEAGO::compute_SS_distances(
+    comp_Wang_clusters_wardD2,
+    distance=c("max", "avg","rcmax", "BMA")
+)
+##GOclusters heatmap
+comp_Wang_clusters_wardD2<-ViSEAGO::GOclusters_heatmap(
+    comp_Wang_clusters_wardD2,
+    tree=list(
+        distance="BMA",
+        aggreg.method="ward.D2"
+    )
+)
+
+
+```
+```{r}
+ViSEAGO::show_heatmap(
+    comp_Wang_clusters_wardD2,
+    "GOterms",
+)
+```
+
+```{r}
+ViSEAGO::show_heatmap(
+    comp_Wang_clusters_wardD2,
+    "GOcluster",
+)
+```
+
+
+#Plotting
+###high
+#####GOterm heatmap of high
+```{r}
+# x=ViSEAGO::show_heatmap(
+#     high_up_Wang_clusters_wardD2,
+#     "GOterms",
+# )
+# orca(x,'high_up_heatmap.svg')
+# 
+# x=ViSEAGO::show_heatmap(
+#     high_dw_Wang_clusters_wardD2,
+#     "GOterms",
+# )
+# orca(x,'high_dw_heatmap.svg')
+
+x=ViSEAGO::show_heatmap(
+    high_Wang_clusters_wardD2,
+    "GOterms",
+)
+orca(x,'high_heatmap.svg')
+```
+#####GOclusters heatmap of high
+```{r}
+# display the GOClusters heatmap
+# ViSEAGO::show_heatmap(
+#     high_up_Wang_clusters_wardD2,
+#     "GOclusters",
+#     file='high_up_heatmap_cluster.png',
+# )
+# ViSEAGO::show_heatmap(
+#     high_dw_Wang_clusters_wardD2,
+#     "GOclusters",
+#     file='high_dw_heatmap_cluster.png',
+# )
+ViSEAGO::show_heatmap(
+    high_Wang_clusters_wardD2,
+    "GOclusters",
+    file='high_heatmap_cluster.png',
+)
+```
+#####Upset plot of DEGs high
+```{r}
+setwd("G:/Seq_data/PM/20210524_Analysis")
+high_upset_df = as.data.frame(selection_high)
+rownames(high_upset_df)=high_upset_df[,1]
+
+# high_upset_df[,c('Nit','Sul','Mix')]=0
+# high_upset_df[selection_Nit_up,'Nit']=1
+# high_upset_df[selection_Sul_up,'Sul']=1
+# high_upset_df[selection_Mix_up,'Mix']=1
+# 
+# pdf('high_up_DEG_upset.pdf')
+# upset(high_upset_df)
+# dev.off()
+# 
+# high_upset_df[,c('Nit','Sul','Mix')]=0
+# high_upset_df[selection_Nit_dw,'Nit']=1
+# high_upset_df[selection_Sul_dw,'Sul']=1
+# high_upset_df[selection_Mix_dw,'Mix']=1
+# 
+# pdf('high_dw_DEG_upset.pdf')
+# upset(high_upset_df)
+# dev.off()
+
+high_upset_df[,c('Nit','Sul','Mix')]=0
+high_upset_df[selection_Nit,'Nit']=1
+high_upset_df[selection_Sul,'Sul']=1
+high_upset_df[selection_Mix,'Mix']=1
+
+pdf('high_DEG_upset.pdf')
+upset(high_upset_df)
+dev.off()
+```
+
+#####Upset plot of GO high
+```{r}
+setwd("G:/Seq_data/PM/20210524_Analysis")
+# pdf('high_up_GO_upset.pdf')
+# Upset(high_up_Wang_clusters_wardD2,
+#       file='high_up_GO_upset.csv')
+# dev.off()
+# upset_data <-read.csv('high_up_GO_upset.csv',header=TRUE,sep='\t')
+# 
+# 
+# pdf('high_dw_GO_upset.pdf')
+# Upset(high_dw_Wang_clusters_wardD2,
+#       file='high_dw_GO_upset.csv')
+# dev.off()
+# upset_data <-read.csv('high_dw_GO_upset.csv',header=TRUE,sep='\t')
+# 
+
+pdf('high_GO_upset.pdf')
+Upset(high_Wang_clusters_wardD2,
+      file='high_GO_upset.csv')
+dev.off()
+upset_data <-read.csv('high_GO_upset.csv',header=TRUE,sep='\t')
+```
+#####GSEA of Mix
+```{r}
+x = as.data.frame(res_Mix)
+x$gene_id = rownames(x)
+setwd("G:/Seq_data/PM/20210524_Analysis")
+write.table(x[,c("gene_id","log2FoldChange")],file="Mix_genes.rnk",quote=F,sep="\t",row.names=F)
+
+# x = merge(x,human_G_entrezid_list,by.x='gene_id',by.y='ensembl_gene_id')
+# x = na.omit(x)
+# write.table(x[,c("entrezgene_id","log2FoldChange")],file="Mix_genes_entrez.rnk",quote=F,sep="\t",row.names=F)
+
+```
+#####Gene expression heatmap of high
+```{r}
+setwd("G:/Seq_data/PM/20210524_Analysis")
+my.break=c(seq(-2,2,by=0.05))
+# pdf('high_up_gene_expression.pdf')
+# pheatmap(res_high_up,cluster_rows = T, cluster_cols = F, show_rownames = F, scale='none',
+#          clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+#          color=colorRampPalette(c('#0011DD','white','#DD1100'))(81), breaks=my.break
+# )
+# dev.off()
+# pdf('high_dw_gene_expression.pdf')
+# pheatmap(res_high_dw,cluster_rows = T, cluster_cols = F, show_rownames = F, scale='none',
+#          clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+#          color=colorRampPalette(c('#0011DD','white','#DD1100'))(81), breaks=my.break
+# )
+# dev.off()
+pdf('high_gene_expression.pdf')
+pheatmap(res_high[order(-res_high$Mix),],cluster_rows = T, cluster_cols = F, show_rownames = F, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(81), breaks=my.break
+)
+dev.off()
+# pdf('high_gene_expression_relative.pdf')
+# pheatmap(counts(dds_high,normalized=T)[selection_high,],cluster_rows=T, cluster_cols = T, show_rownames = F, scale='row',
+#          clustering_distance_rows = 'euclidean', clustering_method = 'ward.D2',
+#          color=colorRampPalette(c('#0011DD','white','#DD1100'))(81), breaks=my.break
+# )
+# dev.off()
+```
+#####Gene expression heatmap of high specific GO
+GO:0006695 cholesterol biosynthetic process
+GO:0006631 fatty acid metabolic process
+GO:0006638 neutral lipid metabolic process
+GO:0006644 phospholipid metabolic process
+
+GO:0061621 canonical glycolysis
+GO:0009636 response to toxic substance
+
+GO:0006695 cholesterol biosynthetic process
+```{r}
+selection_steroid = unique (c(
+                              ls(BP_Mix@graph@nodeData@data[["GO:0006695"]][["genes"]])
+                              )
+                            )
+
+
+res_high_steroid = data.frame(res_Nit[selection_steroid,"log2FoldChange"],
+                              res_Sul[selection_steroid,'log2FoldChange'],
+                              res_Mix[selection_steroid,'log2FoldChange']
+                              )
+colnames(res_high_steroid) <-c("Nit","Sul","Mix")  
+
+res_high_steroid$gene_id = rownames(res_high_steroid)
+res_high_steroid = merge(res_high_steroid,human_G_symbol_list,by.x='gene_id',by.y='ensembl_gene_id')
+rownames(res_high_steroid)=res_high_steroid$hgnc_symbol
+res_high_steroid=res_high_steroid[,c('Nit','Sul','Mix')]
+ordered_steroid = order(-res_high_steroid$Mix)
+res_high_steroid <-res_high_steroid[ordered_steroid,]
+
+my.break=c(seq(-2,2,by=0.05))
+setwd("G:/Seq_data/PM/20210524_Analysis")
+pdf('high_cholesterol_gene_expression.pdf')
+pheatmap(res_high_steroid,cluster_rows = F, cluster_cols = F, show_rownames = T, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(81), breaks=my.break
+)
+dev.off()
+
+```
+GO:0006631 fatty acid metabolic process
+```{r}
+selection_steroid = unique (c(
+                              ls(BP_Mix@graph@nodeData@data[["GO:0006631"]][["genes"]])
+                              )
+                            )
+
+
+res_high_steroid = data.frame(res_Nit[selection_steroid,"log2FoldChange"],
+                              res_Sul[selection_steroid,'log2FoldChange'],
+                              res_Mix[selection_steroid,'log2FoldChange']
+                              )
+colnames(res_high_steroid) <-c("Nit","Sul","Mix")  
+
+res_high_steroid$gene_id = rownames(res_high_steroid)
+res_high_steroid = merge(res_high_steroid,human_G_symbol_list,by.x='gene_id',by.y='ensembl_gene_id')
+rownames(res_high_steroid)=res_high_steroid$hgnc_symbol
+res_high_steroid=res_high_steroid[,c('Nit','Sul','Mix')]
+ordered_steroid = order(-res_high_steroid$Mix)
+res_high_steroid <-res_high_steroid[ordered_steroid,]
+
+my.break=c(seq(-2,2,by=0.05))
+setwd("G:/Seq_data/PM/20210524_Analysis")
+pdf('high_fatty_gene_expression.pdf')
+pheatmap(res_high_steroid,cluster_rows = F, cluster_cols = F, show_rownames = T, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(81), breaks=my.break
+)
+dev.off()
+```
+GO:0006638 neutral lipid metabolic process
+```{r}
+selection_steroid = unique (c(
+                              ls(BP_Mix@graph@nodeData@data[["GO:0006638"]][["genes"]])
+                              )
+                            )
+
+
+res_high_steroid = data.frame(res_Nit[selection_steroid,"log2FoldChange"],
+                              res_Sul[selection_steroid,'log2FoldChange'],
+                              res_Mix[selection_steroid,'log2FoldChange']
+                              )
+colnames(res_high_steroid) <-c("Nit","Sul","Mix")  
+
+res_high_steroid$gene_id = rownames(res_high_steroid)
+res_high_steroid = merge(res_high_steroid,human_G_symbol_list,by.x='gene_id',by.y='ensembl_gene_id')
+rownames(res_high_steroid)=res_high_steroid$hgnc_symbol
+res_high_steroid=res_high_steroid[,c('Nit','Sul','Mix')]
+ordered_steroid = order(-res_high_steroid$Mix)
+res_high_steroid <-res_high_steroid[ordered_steroid,]
+
+my.break=c(seq(-2,2,by=0.05))
+setwd("G:/Seq_data/PM/20210524_Analysis")
+pdf('high_neutral_gene_expression.pdf')
+pheatmap(res_high_steroid,cluster_rows = F, cluster_cols = F, show_rownames = T, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(81), breaks=my.break
+)
+dev.off()
+```
+GO:0006644 phospholipid metabolic process
+```{r}
+selection_steroid = unique (c(
+                              ls(BP_Mix@graph@nodeData@data[["GO:0006644"]][["genes"]])
+                              )
+                            )
+
+
+res_high_steroid = data.frame(res_Nit[selection_steroid,"log2FoldChange"],
+                              res_Sul[selection_steroid,'log2FoldChange'],
+                              res_Mix[selection_steroid,'log2FoldChange']
+                              )
+colnames(res_high_steroid) <-c("Nit","Sul","Mix")  
+
+res_high_steroid$gene_id = rownames(res_high_steroid)
+res_high_steroid = merge(res_high_steroid,human_G_symbol_list,by.x='gene_id',by.y='ensembl_gene_id')
+rownames(res_high_steroid)=res_high_steroid$hgnc_symbol
+res_high_steroid=res_high_steroid[,c('Nit','Sul','Mix')]
+ordered_steroid = order(-res_high_steroid$Mix)
+res_high_steroid <-res_high_steroid[ordered_steroid,]
+
+my.break=c(seq(-2,2,by=0.05))
+setwd("G:/Seq_data/PM/20210524_Analysis")
+pdf('high_phospho_gene_expression.pdf')
+pheatmap(res_high_steroid,cluster_rows = F, cluster_cols = F, show_rownames = T, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(81), breaks=my.break
+)
+dev.off()
+```
+GO:0061621 canonical glycolysis
+```{r}
+selection_steroid = unique (c(
+                              ls(BP_Mix@graph@nodeData@data[["GO:0061621"]][["genes"]])
+                              )
+                            )
+
+
+res_high_steroid = data.frame(res_Nit[selection_steroid,"log2FoldChange"],
+                              res_Sul[selection_steroid,'log2FoldChange'],
+                              res_Mix[selection_steroid,'log2FoldChange']
+                              )
+colnames(res_high_steroid) <-c("Nit","Sul","Mix")  
+
+res_high_steroid$gene_id = rownames(res_high_steroid)
+res_high_steroid = merge(res_high_steroid,human_G_symbol_list,by.x='gene_id',by.y='ensembl_gene_id')
+rownames(res_high_steroid)=res_high_steroid$hgnc_symbol
+res_high_steroid=res_high_steroid[,c('Nit','Sul','Mix')]
+ordered_steroid = order(-res_high_steroid$Mix)
+res_high_steroid <-res_high_steroid[ordered_steroid,]
+
+my.break=c(seq(-2,2,by=0.05))
+setwd("G:/Seq_data/PM/20210524_Analysis")
+pdf('high_glycolysis_gene_expression.pdf')
+pheatmap(res_high_steroid,cluster_rows = F, cluster_cols = F, show_rownames = T, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(81), breaks=my.break
+)
+dev.off()
+
+```
+GO:0009636 response to toxic substance
+```{r}
+selection_steroid = unique (c(
+                              ls(BP_Mix@graph@nodeData@data[["GO:0009636"]][["genes"]])
+                              )
+                            )
+
+
+res_high_steroid = data.frame(res_Nit[selection_steroid,"log2FoldChange"],
+                              res_Sul[selection_steroid,'log2FoldChange'],
+                              res_Mix[selection_steroid,'log2FoldChange']
+                              )
+colnames(res_high_steroid) <-c("Nit","Sul","Mix")  
+
+res_high_steroid$gene_id = rownames(res_high_steroid)
+res_high_steroid = merge(res_high_steroid,human_G_symbol_list,by.x='gene_id',by.y='ensembl_gene_id')
+rownames(res_high_steroid)=res_high_steroid$hgnc_symbol
+res_high_steroid=res_high_steroid[,c('Nit','Sul','Mix')]
+ordered_steroid = order(-res_high_steroid$Mix)
+res_high_steroid <-res_high_steroid[ordered_steroid,]
+
+my.break=c(seq(-2,2,by=0.05))
+setwd("G:/Seq_data/PM/20210524_Analysis")
+pdf('high_toxic_gene_expression.pdf')
+pheatmap(res_high_steroid,cluster_rows = T, cluster_cols = F, show_rownames = T, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(81), breaks=my.break
+)
+dev.off()
+```
+
+GO:0006695 cholesterol biosynthetic process
+GO:0006631 fatty acid metabolic process
+GO:0006638 neutral lipid metabolic process
+GO:0006644 phospholipid metabolic process
+GO:0061621 canonical glycolysis
+GO:0009636 response to toxic substance
+```{r}
+log10(classic_BP_Mix@score['GO:0006695'])
+log10(classic_BP_Mix@score['GO:0006631'])
+log10(classic_BP_Mix@score['GO:0006638'])
+log10(classic_BP_Mix@score['GO:0006644'])
+log10(classic_BP_Mix@score['GO:0061621'])
+log10(classic_BP_Mix@score['GO:0009636'])
+```
+GO:0061621 canonical glycolysis
+GO:0009636 response to toxic substance
+```{r}
+log10(classic_BP_Nit@score['GO:0061621'])
+log10(classic_BP_Sul@score['GO:0061621'])
+log10(classic_BP_Mix@score['GO:0061621'])
+
+log10(classic_BP_Nit@score['GO:0009636'])
+log10(classic_BP_Sul@score['GO:0009636'])
+log10(classic_BP_Mix@score['GO:0009636'])
+```
+
+
+high merge
+```{r}
+selection_merge_final = c()
+selection_merge = unique (c(
+                              ls(BP_Mix@graph@nodeData@data[["GO:0006695"]][["genes"]]),
+                              ls(BP_Mix@graph@nodeData@data[["GO:0061621"]][["genes"]]),
+                              ls(BP_Mix@graph@nodeData@data[["GO:0006631"]][["genes"]]),
+                              ls(BP_Mix@graph@nodeData@data[["GO:0006638"]][["genes"]]),
+                              ls(BP_Mix@graph@nodeData@data[["GO:0006644"]][["genes"]])
+                              )
+                            )
+
+res_high_merge = data.frame(res_Nit[selection_merge,"log2FoldChange"],
+                            res_Sul[selection_merge,'log2FoldChange'],
+                            res_Mix[selection_merge,'log2FoldChange']
+                              )
+colnames(res_high_merge) <-c("Nit","Sul","Mix")  
+
+
+selection_steroid = unique (c(
+                              ls(BP_Mix@graph@nodeData@data[["GO:0006695"]][["genes"]])
+                              )
+                            )
+res_high_steroid = res_high_merge[selection_steroid,]
+res_high_steroid = res_high_steroid[order(-res_high_steroid$Mix),]
+
+rownames(res_high_steroid)=NULL
+res_high_merge_final = res_high_steroid
+
+selection_steroid = unique (c(
+                              ls(BP_Mix@graph@nodeData@data[["GO:0061621"]][["genes"]])
+                              )
+                            )
+res_high_steroid = res_high_merge[selection_steroid,]
+res_high_steroid = res_high_steroid[order(-res_high_steroid$Mix),]
+
+rownames(res_high_steroid)=NULL
+res_high_merge_final = rbind(res_high_merge_final,res_high_steroid)
+
+selection_steroid = unique (c(
+                              ls(BP_Mix@graph@nodeData@data[["GO:0006631"]][["genes"]])
+                              )
+                            )
+res_high_steroid = res_high_merge[selection_steroid,]
+res_high_steroid = res_high_steroid[order(-res_high_steroid$Mix),]
+
+rownames(res_high_steroid)=NULL
+res_high_merge_final = rbind(res_high_merge_final,res_high_steroid)
+selection_steroid = unique (c(
+                              ls(BP_Mix@graph@nodeData@data[["GO:0006638"]][["genes"]])
+                              )
+                            )
+res_high_steroid = res_high_merge[selection_steroid,]
+res_high_steroid = res_high_steroid[order(-res_high_steroid$Mix),]
+
+rownames(res_high_steroid)=NULL
+res_high_merge_final = rbind(res_high_merge_final,res_high_steroid)
+selection_steroid = unique (c(
+                              ls(BP_Mix@graph@nodeData@data[["GO:0006644"]][["genes"]])
+                              )
+                            )
+res_high_steroid = res_high_merge[selection_steroid,]
+res_high_steroid = res_high_steroid[order(-res_high_steroid$Mix),]
+
+rownames(res_high_steroid)=NULL
+res_high_merge_final = rbind(res_high_merge_final,res_high_steroid)
+
+
+my.break=c(seq(-2,2,by=0.05))
+setwd("G:/Seq_data/PM/20210524_Analysis")
+pdf('high_merge_gene_expression.pdf')
+pheatmap(res_high_merge_final,cluster_rows = F, cluster_cols = F, show_rownames = T, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(81), breaks=my.break
+)
+dev.off()
+
+```
+
+#####LI_LUNG_CANCER
+```{r}
+selection_lung = read.csv('LI_LUNG_CANCER.txt',header=TRUE,skip=1)[[1]]
+#KRAS_AMP_LUNG_UP_V1_UP.txt is a list of genes from GSEA database
+
+res_high_lung = data.frame(res_Nit[,"log2FoldChange"],
+                              res_Sul[,'log2FoldChange'],
+                              res_Mix[,'log2FoldChange']
+                              )
+colnames(res_high_lung) <-c("Nit","Sul","Mix")  
+
+res_high_lung$gene_id = rownames(res_high_lung)
+res_high_lung = merge(res_high_lung,human_G_symbol_list,by.x = 'gene_id',by.y='ensembl_gene_id')
+res_high_lung[res_high_lung$hgnc_symbol=="",]=NA
+res_high_lung=na.omit(res_high_lung)
+rownames(res_high_lung)=res_high_lung$hgnc_symbol
+
+res_high_lung = res_high_lung[selection_lung,c("Nit","Sul","Mix")]
+res_high_lung = res_high_lung[order(-res_high_lung$Mix),]
+res_high_lung = na.omit(res_high_lung)
+
+my.break=c(seq(-2,2,by=0.05))
+setwd("G:/Seq_data/PM/20210524_Analysis")
+pdf('high_LI_LUNG_CANCER_gene_expression.pdf')
+pheatmap(res_high_lung,cluster_rows = F, cluster_cols = F, show_rownames = T, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(81), breaks=my.break
+)
+dev.off()
+```
+#####LI_AMPLIFIED_IN_LUNG_CANCER
+```{r}
+selection_lung = read.csv('LI_AMPLIFIED_IN_LUNG_CANCER.txt',header=TRUE,skip=1)[[1]]
+#KRAS_AMP_LUNG_UP_V1_UP.txt is a list of genes from GSEA database
+
+res_high_lung = data.frame(res_Nit[,"log2FoldChange"],
+                              res_Sul[,'log2FoldChange'],
+                              res_Mix[,'log2FoldChange']
+                              )
+colnames(res_high_lung) <-c("Nit","Sul","Mix")  
+
+res_high_lung$gene_id = rownames(res_high_lung)
+res_high_lung = merge(res_high_lung,human_G_symbol_list,by.x = 'gene_id',by.y='ensembl_gene_id')
+res_high_lung[res_high_lung$hgnc_symbol=="",]=NA
+res_high_lung=na.omit(res_high_lung)
+rownames(res_high_lung)=res_high_lung$hgnc_symbol
+
+res_high_lung = res_high_lung[selection_lung,c("Nit","Sul","Mix")]
+res_high_lung = res_high_lung[order(-res_high_lung$Mix),]
+res_high_lung = na.omit(res_high_lung)
+
+my.break=c(seq(-2,2,by=0.05))
+setwd("G:/Seq_data/PM/20210524_Analysis")
+pdf('high_LI_AMPLIFIED_IN_LUNG_CANCER_gene_expression.pdf')
+pheatmap(res_high_lung,cluster_rows = F, cluster_cols = F, show_rownames = T, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(81), breaks=my.break
+)
+dev.off()
+```
+#####LI_LUNG_CANCER_RNA
+```{r}
+selection_lung = read.csv('LI_LUNG_CANCER_RNA.grp',header=TRUE,skip=1)[[1]]
+#KRAS_AMP_LUNG_UP_V1_UP.txt is a list of genes from GSEA database
+
+res_high_lung = data.frame(res_Nit[,"log2FoldChange"],
+                              res_Sul[,'log2FoldChange'],
+                              res_Mix[,'log2FoldChange']
+                              )
+colnames(res_high_lung) <-c("Nit","Sul","Mix")  
+
+res_high_lung$gene_id = rownames(res_high_lung)
+res_high_lung = merge(res_high_lung,human_G_symbol_list,by.x = 'gene_id',by.y='ensembl_gene_id')
+res_high_lung[res_high_lung$hgnc_symbol=="",]=NA
+res_high_lung=na.omit(res_high_lung)
+rownames(res_high_lung)=res_high_lung$hgnc_symbol
+
+res_high_lung = res_high_lung[selection_lung,c("Nit","Sul","Mix")]
+res_high_lung = res_high_lung[order(-res_high_lung$Mix),]
+res_high_lung = na.omit(res_high_lung)
+
+my.break=c(seq(-2,2,by=0.05))
+setwd("G:/Seq_data/PM/20210524_Analysis")
+pdf('high_LI_LUNG_CANCER_RNA_gene_expression.pdf')
+pheatmap(res_high_lung,cluster_rows = F, cluster_cols = F, show_rownames = T, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(81), breaks=my.break
+)
+dev.off()
+```
+
+#####VolcanoPlot of high
+Nit
+```{r}
+x=as.data.frame(res_Nit)
+sig_genes=selection_Nit
+fc_threshold = fc_threshold_high
+pval_threshold = -log10(pval_threshold_high)
+x$sig = 'non'
+x[sig_genes,'sig']='sig'
+x$alpha = 0.001
+x[sig_genes,'alpha']=0.001
+
+setwd("G:/Seq_data/PM/20210524_Analysis")
+tiff('Nit_volcano.tif',width=960,height=960)
+ggplot(x,aes(x=log2FoldChange,y=-log10(pvalue)))+
+  geom_point(aes(color=sig,size=10,alpha=alpha))+
+  scale_color_manual(values=c("gray","#EE5555"))+
+  theme_classic()+
+  scale_size_identity()+
+  geom_vline(xintercept = -fc_threshold, linetype="dotted",alpha=1, color = "gray", size=3)+
+  geom_vline(xintercept = +fc_threshold, linetype="dotted",alpha=1, color = "gray", size=3)+
+  geom_hline(yintercept = +pval_threshold, linetype='dotted',alpha=1,color='gray', size=3)
+dev.off()
+```
+Sul
+```{r}
+x=as.data.frame(res_Sul)
+sig_genes=selection_Sul
+fc_threshold = fc_threshold_high
+pval_threshold = -log10(pval_threshold_high)
+x$sig = 'non'
+x[sig_genes,'sig']='sig'
+x$alpha = 0.001
+x[sig_genes,'alpha']=0.001
+
+setwd("G:/Seq_data/PM/20210524_Analysis")
+tiff('Sul_volcano.tif',width=960,height=960)
+ggplot(x,aes(x=log2FoldChange,y=-log10(pvalue)))+
+  geom_point(aes(color=sig,size=10,alpha=alpha))+
+  scale_color_manual(values=c("gray","#EE5555"))+
+  theme_classic()+
+  scale_size_identity()+
+  geom_vline(xintercept = -fc_threshold, linetype="dotted",alpha=1, color = "gray", size=3)+
+  geom_vline(xintercept = +fc_threshold, linetype="dotted",alpha=1, color = "gray", size=3)+
+  geom_hline(yintercept = +pval_threshold, linetype='dotted',alpha=1,color='gray', size=3)
+dev.off()
+```
+Mix
+```{r}
+x=as.data.frame(res_Mix)
+sig_genes=selection_Mix
+fc_threshold = fc_threshold_high
+pval_threshold = -log10(pval_threshold_high)
+x$sig = 'non'
+x[sig_genes,'sig']='sig'
+x$alpha = 0.001
+x[sig_genes,'alpha']=0.001
+
+setwd("G:/Seq_data/PM/20210524_Analysis")
+tiff('Mix_volcano.tif',width=960,height=960)
+ggplot(x,aes(x=log2FoldChange,y=-log10(pvalue)))+
+  geom_point(aes(color=sig,size=10,alpha=alpha))+
+  scale_color_manual(values=c("gray","#EE5555"))+
+  theme_classic()+
+  scale_size_identity()+
+  geom_vline(xintercept = -fc_threshold, linetype="dotted",alpha=1, color = "gray", size=3)+
+  geom_vline(xintercept = +fc_threshold, linetype="dotted",alpha=1, color = "gray", size=3)+
+  geom_hline(yintercept = +pval_threshold, linetype='dotted',alpha=1,color='gray', size=3)
+dev.off()
+```
+###diverse
+#####GOterm heatmap of diverse
+```{r}
+# x=ViSEAGO::show_heatmap(
+#     diverse_up_Wang_clusters_wardD2,
+#     "GOterms",
+# )
+# orca(x,'diverse_up_heatmap.svg')
+# 
+# x=ViSEAGO::show_heatmap(
+#     diverse_dw_Wang_clusters_wardD2,
+#     "GOterms",
+# )
+# orca(x,'diverse_dw_heatmap.svg')
+
+x=ViSEAGO::show_heatmap(
+    diverse_Wang_clusters_wardD2,
+    "GOterms",
+)
+orca(x,'diverse_heatmap.svg')
+```
+#####GOclusters heatmap of diverse
+```{r}
+setwd("G:/Seq_data/PM/20210524_Analysis")
+# display the GOClusters heatmap
+# ViSEAGO::show_heatmap(
+#     diverse_up_Wang_clusters_wardD2,
+#     "GOclusters",
+#     file='diverse_up_heatmap_cluster.png',
+# )
+# ViSEAGO::show_heatmap(
+#     diverse_dw_Wang_clusters_wardD2,
+#     "GOclusters",
+#     file='diverse_dw_heatmap_cluster.png',
+# )
+ViSEAGO::show_heatmap(
+    diverse_Wang_clusters_wardD2,
+    "GOclusters",
+    file='diverse_heatmap_cluster.png',
+)
+```
+#####GSEA of Mix5
+```{r}
+x = as.data.frame(res_Mix5)
+x$gene_id = rownames(x)
+setwd("G:/Seq_data/PM/20210524_Analysis")
+write.table(x[,c("gene_id","log2FoldChange")],file="Mix5_genes.rnk",quote=F,sep="\t",row.names=F)
+```
+```{r}
+x = as.data.frame(res_Mix4)
+x$gene_id = rownames(x)
+setwd("G:/Seq_data/PM/20210524_Analysis")
+write.table(x[,c("gene_id","log2FoldChange")],file="Mix4_genes.rnk",quote=F,sep="\t",row.names=F)
+```
+
+#####Gene expression heatmap of diverse
+```{r}
+setwd("G:/Seq_data/PM/20210524_Analysis")
+my.break=c(seq(-2,2,by=0.05))
+# pdf('diverse_up_gene_expression.pdf')
+# pheatmap(res_diverse_up,cluster_rows = F, cluster_cols = F, show_rownames = F, scale='none',
+#          clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+#          color=colorRampPalette(c('#0011DD','white','#DD1100'))(81), breaks=my.break
+# )
+# dev.off()
+# pdf('diverse_dw_gene_expression.pdf')
+# pheatmap(res_diverse_dw,cluster_rows = T, cluster_cols = F, show_rownames = F, scale='none',
+#          clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+#          color=colorRampPalette(c('#0011DD','white','#DD1100'))(81), breaks=my.break
+# )
+# dev.off()
+pdf('diverse_gene_expression.pdf')
+pheatmap(res_diverse[order(-res_diverse$Mix5),],cluster_rows = T, cluster_cols = F, show_rownames = F, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(81), breaks=my.break
+)
+dev.off()
+# pdf('diverse_gene_expression_relative.pdf')
+# pheatmap(counts(dds_diverse,normalized=T)[selection_diverse,],cluster_rows=T, cluster_cols = T, show_rownames = F, scale='row',
+#          clustering_distance_rows = 'euclidean', clustering_method = 'ward.D2',
+#          color=colorRampPalette(c('#0011DD','white','#DD1100'))(81), breaks=my.break
+# )
+# dev.off()
+```
+#####Gene expression heatmap of diverse specific GO
+
+
+GO:0006695 cholesterol biosynthetic process
+GO:0006631 fatty acid metabolic process
+GO:0006638 neutral lipid metabolic process
+GO:0006644 phospholipid metabolic process
+
+GO:0061621 canonical glycolysis
+GO:0009636 response to toxic substance
+
+GO:0006695 cholesterol biosynthetic process
+```{r}
+selection_steroid = unique (c(
+                              ls(BP_Mix5@graph@nodeData@data[["GO:0006695"]][["genes"]])
+                              )
+                            )
+
+
+res_diverse_steroid = data.frame(res_Mix1[selection_steroid,"log2FoldChange"],
+                              res_Mix2[selection_steroid,"log2FoldChange"],
+                              res_Mix3[selection_steroid,"log2FoldChange"],
+                              res_Mix4[selection_steroid,"log2FoldChange"],
+                              res_Mix5[selection_steroid,'log2FoldChange']
+                              )
+colnames(res_diverse_steroid) <-c("Mix1","Mix2","Mix3","Mix4","Mix5")
+
+res_diverse_steroid$gene_id = rownames(res_diverse_steroid)
+res_diverse_steroid = merge(res_diverse_steroid,human_G_symbol_list,by.x='gene_id',by.y='ensembl_gene_id')
+res_diverse_steroid[res_diverse_steroid$hgnc_symbol=="",]=NA
+res_diverse_steroid=na.omit(res_diverse_steroid)
+rownames(res_diverse_steroid)=res_diverse_steroid$hgnc_symbol
+res_diverse_steroid=res_diverse_steroid[,c("Mix1","Mix2","Mix3","Mix4","Mix5")]
+ordered_steroid = order(-res_diverse_steroid$Mix5)
+res_diverse_steroid <-res_diverse_steroid[ordered_steroid,]
+
+my.break=c(seq(-1,1,by=0.05))
+setwd("G:/Seq_data/PM/20210524_Analysis")
+pdf('diverse_cholesterol_gene_expression.pdf')
+pheatmap(res_diverse_steroid,cluster_rows = F, cluster_cols = F, show_rownames = T, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(41), breaks=my.break
+)
+dev.off()
+
+```
+
+GO:0006631 fatty acid metabolic process
+```{r}
+selection_steroid = unique (c(
+                              ls(BP_Mix5@graph@nodeData@data[["GO:0006631"]][["genes"]])
+                              )
+                            )
+
+
+res_diverse_steroid = data.frame(res_Mix1[selection_steroid,"log2FoldChange"],
+                              res_Mix2[selection_steroid,"log2FoldChange"],
+                              res_Mix3[selection_steroid,"log2FoldChange"],
+                              res_Mix4[selection_steroid,"log2FoldChange"],
+                              res_Mix5[selection_steroid,'log2FoldChange']
+                              )
+colnames(res_diverse_steroid) <-c("Mix1","Mix2","Mix3","Mix4","Mix5")
+
+res_diverse_steroid$gene_id = rownames(res_diverse_steroid)
+res_diverse_steroid = merge(res_diverse_steroid,human_G_symbol_list,by.x='gene_id',by.y='ensembl_gene_id')
+res_diverse_steroid[res_diverse_steroid$hgnc_symbol=="",]=NA
+res_diverse_steroid=na.omit(res_diverse_steroid)
+rownames(res_diverse_steroid)=res_diverse_steroid$hgnc_symbol
+res_diverse_steroid=res_diverse_steroid[,c("Mix1","Mix2","Mix3","Mix4","Mix5")]
+ordered_steroid = order(-res_diverse_steroid$Mix5)
+res_diverse_steroid <-res_diverse_steroid[ordered_steroid,]
+
+my.break=c(seq(-1,1,by=0.05))
+setwd("G:/Seq_data/PM/20210524_Analysis")
+pdf('diverse_fatty_gene_expression.pdf')
+pheatmap(res_diverse_steroid,cluster_rows = F, cluster_cols = F, show_rownames = T, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(41), breaks=my.break
+)
+dev.off()
+
+```
+GO:0006638 neutral lipid metabolic process
+```{r}
+selection_steroid = unique (c(
+                              ls(BP_Mix5@graph@nodeData@data[["GO:0006638"]][["genes"]])
+                              )
+                            )
+
+
+res_diverse_steroid = data.frame(res_Mix1[selection_steroid,"log2FoldChange"],
+                              res_Mix2[selection_steroid,"log2FoldChange"],
+                              res_Mix3[selection_steroid,"log2FoldChange"],
+                              res_Mix4[selection_steroid,"log2FoldChange"],
+                              res_Mix5[selection_steroid,'log2FoldChange']
+                              )
+colnames(res_diverse_steroid) <-c("Mix1","Mix2","Mix3","Mix4","Mix5")
+
+res_diverse_steroid$gene_id = rownames(res_diverse_steroid)
+res_diverse_steroid = merge(res_diverse_steroid,human_G_symbol_list,by.x='gene_id',by.y='ensembl_gene_id')
+res_diverse_steroid[res_diverse_steroid$hgnc_symbol=="",]=NA
+res_diverse_steroid=na.omit(res_diverse_steroid)
+rownames(res_diverse_steroid)=res_diverse_steroid$hgnc_symbol
+res_diverse_steroid=res_diverse_steroid[,c("Mix1","Mix2","Mix3","Mix4","Mix5")]
+ordered_steroid = order(-res_diverse_steroid$Mix5)
+res_diverse_steroid <-res_diverse_steroid[ordered_steroid,]
+
+my.break=c(seq(-1,1,by=0.05))
+setwd("G:/Seq_data/PM/20210524_Analysis")
+pdf('diverse_neutral_gene_expression.pdf')
+pheatmap(res_diverse_steroid,cluster_rows = F, cluster_cols = F, show_rownames = T, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(41), breaks=my.break
+)
+dev.off()
+
+```
+GO:0006644 phospholipid metabolic process
+```{r}
+selection_steroid = unique (c(
+                              ls(BP_Mix5@graph@nodeData@data[["GO:0006644"]][["genes"]])
+                              )
+                            )
+
+
+res_diverse_steroid = data.frame(res_Mix1[selection_steroid,"log2FoldChange"],
+                              res_Mix2[selection_steroid,"log2FoldChange"],
+                              res_Mix3[selection_steroid,"log2FoldChange"],
+                              res_Mix4[selection_steroid,"log2FoldChange"],
+                              res_Mix5[selection_steroid,'log2FoldChange']
+                              )
+colnames(res_diverse_steroid) <-c("Mix1","Mix2","Mix3","Mix4","Mix5")
+
+res_diverse_steroid$gene_id = rownames(res_diverse_steroid)
+res_diverse_steroid = merge(res_diverse_steroid,human_G_symbol_list,by.x='gene_id',by.y='ensembl_gene_id')
+res_diverse_steroid[res_diverse_steroid$hgnc_symbol=="",]=NA
+res_diverse_steroid=na.omit(res_diverse_steroid)
+rownames(res_diverse_steroid)=res_diverse_steroid$hgnc_symbol
+res_diverse_steroid=res_diverse_steroid[,c("Mix1","Mix2","Mix3","Mix4","Mix5")]
+ordered_steroid = order(-res_diverse_steroid$Mix5)
+res_diverse_steroid <-res_diverse_steroid[ordered_steroid,]
+
+my.break=c(seq(-1,1,by=0.05))
+setwd("G:/Seq_data/PM/20210524_Analysis")
+pdf('diverse_phospho_gene_expression.pdf')
+pheatmap(res_diverse_steroid,cluster_rows = F, cluster_cols = F, show_rownames = T, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(41), breaks=my.break
+)
+dev.off()
+
+```
+
+GO:0061621 canonical glycolysis
+```{r}
+selection_steroid = unique (c(
+                              ls(BP_Mix5@graph@nodeData@data[["GO:0061621"]][["genes"]])
+                              )
+                            )
+
+
+res_diverse_steroid = data.frame(res_Mix1[selection_steroid,"log2FoldChange"],
+                              res_Mix2[selection_steroid,"log2FoldChange"],
+                              res_Mix3[selection_steroid,"log2FoldChange"],
+                              res_Mix4[selection_steroid,"log2FoldChange"],
+                              res_Mix5[selection_steroid,'log2FoldChange']
+                              )
+colnames(res_diverse_steroid) <-c("Mix1","Mix2","Mix3","Mix4","Mix5")
+
+res_diverse_steroid$gene_id = rownames(res_diverse_steroid)
+res_diverse_steroid = merge(res_diverse_steroid,human_G_symbol_list,by.x='gene_id',by.y='ensembl_gene_id')
+res_diverse_steroid[res_diverse_steroid$hgnc_symbol=="",]=NA
+res_diverse_steroid=na.omit(res_diverse_steroid)
+rownames(res_diverse_steroid)=res_diverse_steroid$hgnc_symbol
+res_diverse_steroid=res_diverse_steroid[,c("Mix1","Mix2","Mix3","Mix4","Mix5")]
+ordered_steroid = order(-res_diverse_steroid$Mix5)
+res_diverse_steroid <-res_diverse_steroid[ordered_steroid,]
+
+my.break=c(seq(-1,1,by=0.05))
+setwd("G:/Seq_data/PM/20210524_Analysis")
+pdf('diverse_glycolysis_gene_expression.pdf')
+pheatmap(res_diverse_steroid,cluster_rows = F, cluster_cols = F, show_rownames = T, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(41), breaks=my.break
+)
+dev.off()
+
+```
+
+GO:0009636 response to toxic substance
+```{r}
+selection_steroid = unique (c(
+                              ls(BP_Mix5@graph@nodeData@data[["GO:0009636"]][["genes"]])
+                              )
+                            )
+
+
+res_diverse_steroid = data.frame(res_Mix1[selection_steroid,"log2FoldChange"],
+                              res_Mix2[selection_steroid,"log2FoldChange"],
+                              res_Mix3[selection_steroid,"log2FoldChange"],
+                              res_Mix4[selection_steroid,"log2FoldChange"],
+                              res_Mix5[selection_steroid,'log2FoldChange']
+                              )
+colnames(res_diverse_steroid) <-c("Mix1","Mix2","Mix3","Mix4","Mix5")
+
+res_diverse_steroid$gene_id = rownames(res_diverse_steroid)
+res_diverse_steroid = merge(res_diverse_steroid,human_G_symbol_list,by.x='gene_id',by.y='ensembl_gene_id')
+res_diverse_steroid[res_diverse_steroid$hgnc_symbol=="",]=NA
+res_diverse_steroid=na.omit(res_diverse_steroid)
+rownames(res_diverse_steroid)=res_diverse_steroid$hgnc_symbol
+res_diverse_steroid=res_diverse_steroid[,c("Mix1","Mix2","Mix3","Mix4","Mix5")]
+ordered_steroid = order(-res_diverse_steroid$Mix5)
+res_diverse_steroid <-res_diverse_steroid[ordered_steroid,]
+
+my.break=c(seq(-1,1,by=0.05))
+setwd("G:/Seq_data/PM/20210524_Analysis")
+pdf('diverse_toxic_gene_expression.pdf')
+pheatmap(res_diverse_steroid,cluster_rows = F, cluster_cols = F, show_rownames = T, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(41), breaks=my.break
+)
+dev.off()
+
+```
+
+
+GO:0006695 cholesterol biosynthetic process
+GO:0006631 fatty acid metabolic process
+GO:0006638 neutral lipid metabolic process
+GO:0006644 phospholipid metabolic process
+GO:0061621 canonical glycolysis
+GO:0009636 response to toxic substance
+```{r}
+log10(classic_BP_Mix4@score['GO:0006695'])
+log10(classic_BP_Mix5@score['GO:0006695'])
+
+log10(classic_BP_Mix4@score['GO:0006695'])
+log10(classic_BP_Mix4@score['GO:0006631'])
+log10(classic_BP_Mix4@score['GO:0006638'])
+log10(classic_BP_Mix4@score['GO:0006644'])
+log10(classic_BP_Mix4@score['GO:0061621'])
+log10(classic_BP_Mix4@score['GO:0009636'])
+
+log10(classic_BP_Mix5@score['GO:0006695'])
+log10(classic_BP_Mix5@score['GO:0006631'])
+log10(classic_BP_Mix5@score['GO:0006638'])
+log10(classic_BP_Mix5@score['GO:0006644'])
+log10(classic_BP_Mix5@score['GO:0061621'])
+log10(classic_BP_Mix5@score['GO:0009636'])
+```
+
+#####LI_LUNG_CANCER
+```{r}
+selection_lung = read.csv('LI_LUNG_CANCER.txt',header=TRUE,skip=1)[[1]]
+#KRAS_AMP_LUNG_UP_V1_UP.txt is a list of genes from GSEA database
+
+res_diverse_lung = data.frame(res_Mix1[,"log2FoldChange"],
+                              res_Mix2[,"log2FoldChange"],
+                              res_Mix3[,"log2FoldChange"],
+                              res_Mix4[,"log2FoldChange"],
+                              res_Mix5[,'log2FoldChange']
+                              )
+colnames(res_diverse_lung) <-c("Mix1","Mix2","Mix3","Mix4","Mix5")
+
+
+res_diverse_lung$gene_id = rownames(res_diverse_lung)
+res_diverse_lung = merge(res_diverse_lung,human_G_symbol_list,by.x = 'gene_id',by.y='ensembl_gene_id')
+res_diverse_lung[res_diverse_lung$hgnc_symbol=="",]=NA
+res_diverse_lung=na.omit(res_diverse_lung)
+rownames(res_diverse_lung)=res_diverse_lung$hgnc_symbol
+
+res_diverse_lung = res_diverse_lung[selection_lung,c("Mix1","Mix2","Mix3","Mix4","Mix5")]
+res_diverse_lung = res_diverse_lung[order(-res_diverse_lung$Mix5),]
+res_diverse_lung = na.omit(res_diverse_lung)
+
+my.break=c(seq(-1,1,by=0.05))
+setwd("G:/Seq_data/PM/20210524_Analysis")
+pdf('diverse_LI_LUNG_CANCER_gene_expression.pdf')
+pheatmap(res_diverse_lung,cluster_rows = F, cluster_cols = F, show_rownames = T, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(41), breaks=my.break
+)
+dev.off()
+```
+#####LI_AMPLIFIED_IN_LUNG_CANCER
+```{r}
+selection_lung = read.csv('LI_AMPLIFIED_IN_LUNG_CANCER.txt',header=TRUE,skip=1)[[1]]
+#KRAS_AMP_LUNG_UP_V1_UP.txt is a list of genes from GSEA database
+
+res_diverse_lung = data.frame(res_Mix1[,"log2FoldChange"],
+                              res_Mix2[,"log2FoldChange"],
+                              res_Mix3[,"log2FoldChange"],
+                              res_Mix4[,"log2FoldChange"],
+                              res_Mix5[,'log2FoldChange']
+                              )
+colnames(res_diverse_lung) <-c("Mix1","Mix2","Mix3","Mix4","Mix5")
+
+
+res_diverse_lung$gene_id = rownames(res_diverse_lung)
+res_diverse_lung = merge(res_diverse_lung,human_G_symbol_list,by.x = 'gene_id',by.y='ensembl_gene_id')
+res_diverse_lung[res_diverse_lung$hgnc_symbol=="",]=NA
+res_diverse_lung=na.omit(res_diverse_lung)
+rownames(res_diverse_lung)=res_diverse_lung$hgnc_symbol
+
+res_diverse_lung = res_diverse_lung[selection_lung,c("Mix1","Mix2","Mix3","Mix4","Mix5")]
+res_diverse_lung = res_diverse_lung[order(-res_diverse_lung$Mix5),]
+res_diverse_lung = na.omit(res_diverse_lung)
+
+my.break=c(seq(-1,1,by=0.05))
+setwd("G:/Seq_data/PM/20210524_Analysis")
+pdf('diverse_LI_AMPLIFIED_IN_LUNG_CANCER_gene_expression.pdf')
+pheatmap(res_diverse_lung,cluster_rows = F, cluster_cols = F, show_rownames = T, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(41), breaks=my.break
+)
+dev.off()
+```
+#####LI_LUNG_CANCER_RNA
+```{r}
+selection_lung = read.csv('LI_LUNG_CANCER_RNA.grp',header=TRUE,skip=1)[[1]]
+#KRAS_AMP_LUNG_UP_V1_UP.txt is a list of genes from GSEA database
+
+res_diverse_lung = data.frame(res_Mix1[,"log2FoldChange"],
+                              res_Mix2[,"log2FoldChange"],
+                              res_Mix3[,"log2FoldChange"],
+                              res_Mix4[,"log2FoldChange"],
+                              res_Mix5[,'log2FoldChange']
+                              )
+colnames(res_diverse_lung) <-c("Mix1","Mix2","Mix3","Mix4","Mix5")
+
+
+res_diverse_lung$gene_id = rownames(res_diverse_lung)
+res_diverse_lung = merge(res_diverse_lung,human_G_symbol_list,by.x = 'gene_id',by.y='ensembl_gene_id')
+res_diverse_lung[res_diverse_lung$hgnc_symbol=="",]=NA
+res_diverse_lung=na.omit(res_diverse_lung)
+rownames(res_diverse_lung)=res_diverse_lung$hgnc_symbol
+
+res_diverse_lung = res_diverse_lung[selection_lung,c("Mix1","Mix2","Mix3","Mix4","Mix5")]
+res_diverse_lung = res_diverse_lung[order(-res_diverse_lung$Mix5),]
+res_diverse_lung = na.omit(res_diverse_lung)
+
+my.break=c(seq(-1,1,by=0.05))
+setwd("G:/Seq_data/PM/20210524_Analysis")
+pdf('diverse_LI_LI_LUNG_CANCER_RNA_gene_expression.pdf')
+pheatmap(res_diverse_lung,cluster_rows = F, cluster_cols = F, show_rownames = T, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(41), breaks=my.break
+)
+dev.off()
+```
+#####VolcanoPlot of diverse
+Mix4
+```{r}
+x=as.data.frame(res_Mix4)
+sig_genes=selection_Mix4
+fc_threshold = fc_threshold_diverse
+pval_threshold = -log10(pval_threshold_diverse)
+x$sig = 'non'
+x[sig_genes,'sig']='sig'
+x$alpha = 0.001
+x[sig_genes,'alpha']=0.001
+
+setwd("G:/Seq_data/PM/20210524_Analysis")
+tiff('Mix4_volcano.tif',width=960,height=960)
+ggplot(x,aes(x=log2FoldChange,y=-log10(pvalue)))+
+  geom_point(aes(color=sig,size=10,alpha=alpha))+
+  scale_color_manual(values=c("gray","#EE5555"))+
+  theme_classic()+
+  scale_size_identity()+
+  geom_vline(xintercept = -fc_threshold, linetype="dotted",alpha=1, color = "gray", size=3)+
+  geom_vline(xintercept = +fc_threshold, linetype="dotted",alpha=1, color = "gray", size=3)+
+  geom_hline(yintercept = +pval_threshold, linetype='dotted',alpha=1,color='gray', size=3)
+dev.off()
+```
+Mix5
+```{r}
+x=as.data.frame(res_Mix5)
+sig_genes=selection_Mix5
+fc_threshold = fc_threshold_diverse
+pval_threshold = -log10(pval_threshold_diverse)
+x$sig = 'non'
+x[sig_genes,'sig']='sig'
+x$alpha = 0.001
+x[sig_genes,'alpha']=0.001
+
+setwd("G:/Seq_data/PM/20210524_Analysis")
+tiff('Mix5_volcano.tif',width=960,height=960)
+ggplot(x,aes(x=log2FoldChange,y=-log10(pvalue)))+
+  geom_point(aes(color=sig,size=10,alpha=alpha))+
+  scale_color_manual(values=c("gray","#EE5555"))+
+  theme_classic()+
+  scale_size_identity()+
+  geom_vline(xintercept = -fc_threshold, linetype="dotted",alpha=1, color = "gray", size=3)+
+  geom_vline(xintercept = +fc_threshold, linetype="dotted",alpha=1, color = "gray", size=3)+
+  geom_hline(yintercept = +pval_threshold, linetype='dotted',alpha=1,color='gray', size=3)
+dev.off()
+```
+
+###Mouse
+#####GOterm heatmap of mouse
+```{r}
+# x=ViSEAGO::show_heatmap(
+#     mouse_up_Wang_clusters_wardD2,
+#     "GOterms",
+# )
+# orca(x,'mouse_up_heatmap_2.svg')
+# 
+# x=ViSEAGO::show_heatmap(
+#     mouse_dw_Wang_clusters_wardD2,
+#     "GOterms",
+# )
+# orca(x,'mouse_dw_heatmap.svg')
+
+x=ViSEAGO::show_heatmap(
+    mouse_Wang_clusters_wardD2,
+    "GOterms",
+)
+orca(x,'mouse_heatmap.svg')
+```
+#####GOclusters heatmap of mouse
+```{r}
+# setwd("G:/Seq_data/PM/20210524_Analysis")
+# ViSEAGO::show_heatmap(
+#     mouse_up_Wang_clusters_wardD2,
+#     "GOclusters",
+#     file='mouse_up_heatmap_cluster_2.png',
+# )
+# 
+# ViSEAGO::show_heatmap(
+#     mouse_dw_Wang_clusters_wardD2,
+#     "GOclusters",
+#     file='mouse_dw_heatmap_cluster.png',
+# )
+ViSEAGO::show_heatmap(
+    mouse_Wang_clusters_wardD2,
+    "GOclusters",
+    file='mouse_heatmap_cluster.png',
+)
+```
+GSEA of Mouse
+```{r}
+x = as.data.frame(res_mouse)
+x$gene_id = rownames(x)
+setwd("G:/Seq_data/PM/20210524_Analysis")
+write.table(x[,c("gene_id","log2FoldChange")],file="mouse_genes.rnk",quote=F,sep="\t",row.names=F)
+```
+#####GSEA of Mouse
+```{r}
+x = as.data.frame(res_mouse)
+x$gene_id = rownames(x)
+setwd("G:/Seq_data/PM/20210524_Analysis")
+write.table(x[,c("gene_id","log2FoldChange")],file="mouse_genes.rnk",quote=F,sep="\t",row.names=F)
+```
+
+
+#####Gene expression heatmap of mouse
+```{r}
+setwd("G:/Seq_data/PM/20210524_Analysis")
+my.break=c(seq(-2,2,by=0.05))
+# pdf('mouse_up_gene_expression.pdf')
+# pheatmap(res_mouse_sig_up$log2FoldChange,cluster_rows = T, cluster_cols = F, show_rownames = F, scale='none',
+#          clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+#          color=colorRampPalette(c('#0011DD','white','#DD1100'))(81), breaks=my.break
+# )
+# dev.off()
+# pdf('mouse_dw_gene_expression.pdf')
+# pheatmap(res_mouse_sig_dw$log2FoldChange,cluster_rows = T, cluster_cols = F, show_rownames = F, scale='none',
+#          clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+#          color=colorRampPalette(c('#0011DD','white','#DD1100'))(81), breaks=my.break
+# )
+# dev.off()
+pdf('mouse_gene_expression.pdf')
+pheatmap(res_mouse_sig[order(-res_mouse_sig$log2FoldChange),'log2FoldChange'],cluster_rows = F, cluster_cols = F, show_rownames = F, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(81), breaks=my.break
+)
+dev.off()
+pdf('mouse_gene_expression_replicates.pdf')
+pheatmap(counts(dds_mouse,normalized=T)[selection_mouse,],cluster_rows=T, cluster_cols = T, show_rownames = F, scale='row',
+         clustering_distance_rows = 'euclidean', clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(81), breaks=my.break
+)
+dev.off()
+```
+#####Gene expression heatmap of mouse specific GO
+GO:0002523 leukocyte migration involved in inflammatory response
+GO:0006695 cholesterol biosynthetic process
+GO:0006631 fatty acid metabolic process
+GO:0006638 neutral lipid metabolic process
+GO:0006644 phospholipid metabolic process
+
+GO:0061621 canonical glycolysis
+GO:0009636 response to toxic substance
+
+
+GO:0002523 leukocyte migration involved in inflammatory response
+```{r}
+selection_immune = unique (c(ls(BP_mouse@graph@nodeData@data[["GO:0002523"]][["genes"]])
+                              )
+                            )
+res_mouse_immune = res_mouse
+res_mouse_immune$gene_id = rownames(res_mouse)
+res_mouse_immune = data.frame(res_mouse_immune[,c("log2FoldChange","gene_id")]
+                              )
+colnames(res_mouse_immune)=c("Mouse","gene_id")
+res_mouse_immune = res_mouse_immune[selection_immune,]
+res_mouse_immune = merge(res_mouse_immune,mouse_G_symbol_list,by.x='gene_id',by.y='ensembl_gene_id')
+rownames(res_mouse_immune) = res_mouse_immune$mgi_symbol
+res_mouse_immune = res_mouse_immune[order(-res_mouse_immune$Mouse),]
+
+res_mouse_immune_2 = data.frame(res_mouse_immune[,"Mouse"])
+rownames(res_mouse_immune_2)=rownames(res_mouse_immune)
+colnames(res_mouse_immune_2)="Mouse"
+
+my.break=c(seq(-1,1,by=0.05))
+setwd("G:/Seq_data/PM/20210524_Analysis")
+pdf('mouse_leukocyteinflammation_gene_expression.pdf')
+pheatmap(res_mouse_immune_2,cluster_rows = F, cluster_cols = F, show_rownames = T, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(41), breaks=my.break
+)
+dev.off()
+```
+GO:0006695 cholesterol biosynthetic process
+```{r}
+selection_immune = unique (c(ls(BP_mouse@graph@nodeData@data[["GO:0006695"]][["genes"]])
+                              )
+                            )
+res_mouse_immune = res_mouse
+res_mouse_immune$gene_id = rownames(res_mouse)
+res_mouse_immune = data.frame(res_mouse_immune[,c("log2FoldChange","gene_id")]
+                              )
+colnames(res_mouse_immune)=c("Mouse","gene_id")
+res_mouse_immune = res_mouse_immune[selection_immune,]
+res_mouse_immune = merge(res_mouse_immune,mouse_G_symbol_list,by.x='gene_id',by.y='ensembl_gene_id')
+rownames(res_mouse_immune) = res_mouse_immune$mgi_symbol
+res_mouse_immune = res_mouse_immune[order(-res_mouse_immune$Mouse),]
+
+res_mouse_immune_2 = data.frame(res_mouse_immune[,"Mouse"])
+rownames(res_mouse_immune_2)=rownames(res_mouse_immune)
+colnames(res_mouse_immune_2)="Mouse"
+
+my.break=c(seq(-1,1,by=0.05))
+setwd("G:/Seq_data/PM/20210524_Analysis")
+pdf('mouse_cholesterol_gene_expression.pdf')
+pheatmap(res_mouse_immune_2,cluster_rows = F, cluster_cols = F, show_rownames = T, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(41), breaks=my.break
+)
+dev.off()
+```
+GO:0006631 fatty acid metabolic process
+```{r}
+selection_immune = unique (c(ls(BP_mouse@graph@nodeData@data[["GO:0006631"]][["genes"]])
+                              )
+                            )
+res_mouse_immune = res_mouse
+res_mouse_immune$gene_id = rownames(res_mouse)
+res_mouse_immune = data.frame(res_mouse_immune[,c("log2FoldChange","gene_id")]
+                              )
+colnames(res_mouse_immune)=c("Mouse","gene_id")
+res_mouse_immune = res_mouse_immune[selection_immune,]
+res_mouse_immune = merge(res_mouse_immune,mouse_G_symbol_list,by.x='gene_id',by.y='ensembl_gene_id')
+rownames(res_mouse_immune) = res_mouse_immune$mgi_symbol
+res_mouse_immune = res_mouse_immune[order(-res_mouse_immune$Mouse),]
+
+res_mouse_immune_2 = data.frame(res_mouse_immune[,"Mouse"])
+rownames(res_mouse_immune_2)=rownames(res_mouse_immune)
+colnames(res_mouse_immune_2)="Mouse"
+
+my.break=c(seq(-1,1,by=0.05))
+setwd("G:/Seq_data/PM/20210524_Analysis")
+pdf('mouse_fattyacid_gene_expression.pdf')
+pheatmap(res_mouse_immune_2,cluster_rows = F, cluster_cols = F, show_rownames = T, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(41), breaks=my.break
+)
+dev.off()
+```
+GO:0006638 neutral lipid metabolic process
+```{r}
+selection_immune = unique (c(ls(BP_mouse@graph@nodeData@data[["GO:0006638"]][["genes"]])
+                              )
+                            )
+res_mouse_immune = res_mouse
+res_mouse_immune$gene_id = rownames(res_mouse)
+res_mouse_immune = data.frame(res_mouse_immune[,c("log2FoldChange","gene_id")]
+                              )
+colnames(res_mouse_immune)=c("Mouse","gene_id")
+res_mouse_immune = res_mouse_immune[selection_immune,]
+res_mouse_immune = merge(res_mouse_immune,mouse_G_symbol_list,by.x='gene_id',by.y='ensembl_gene_id')
+rownames(res_mouse_immune) = res_mouse_immune$mgi_symbol
+res_mouse_immune = res_mouse_immune[order(-res_mouse_immune$Mouse),]
+
+res_mouse_immune_2 = data.frame(res_mouse_immune[,"Mouse"])
+rownames(res_mouse_immune_2)=rownames(res_mouse_immune)
+colnames(res_mouse_immune_2)="Mouse"
+
+my.break=c(seq(-1,1,by=0.05))
+setwd("G:/Seq_data/PM/20210524_Analysis")
+pdf('mouse_neutral_gene_expression.pdf')
+pheatmap(res_mouse_immune_2,cluster_rows = F, cluster_cols = F, show_rownames = T, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(41), breaks=my.break
+)
+dev.off()
+```
+GO:0006644 phospholipid metabolic process
+```{r}
+selection_immune = unique (c(ls(BP_mouse@graph@nodeData@data[["GO:0006644"]][["genes"]])
+                              )
+                            )
+res_mouse_immune = res_mouse
+res_mouse_immune$gene_id = rownames(res_mouse)
+res_mouse_immune = data.frame(res_mouse_immune[,c("log2FoldChange","gene_id")]
+                              )
+colnames(res_mouse_immune)=c("Mouse","gene_id")
+res_mouse_immune = res_mouse_immune[selection_immune,]
+res_mouse_immune = merge(res_mouse_immune,mouse_G_symbol_list,by.x='gene_id',by.y='ensembl_gene_id')
+rownames(res_mouse_immune) = res_mouse_immune$mgi_symbol
+res_mouse_immune = res_mouse_immune[order(-res_mouse_immune$Mouse),]
+
+res_mouse_immune_2 = data.frame(res_mouse_immune[,"Mouse"])
+rownames(res_mouse_immune_2)=rownames(res_mouse_immune)
+colnames(res_mouse_immune_2)="Mouse"
+
+my.break=c(seq(-1,1,by=0.05))
+setwd("G:/Seq_data/PM/20210524_Analysis")
+pdf('mouse_phospho_gene_expression.pdf')
+pheatmap(res_mouse_immune_2,cluster_rows = F, cluster_cols = F, show_rownames = T, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(41), breaks=my.break
+)
+dev.off()
+```
+GO:0061621 canonical glycolysis
+```{r}
+selection_immune = unique (c(ls(BP_mouse@graph@nodeData@data[["GO:0061621"]][["genes"]])
+                              )
+                            )
+res_mouse_immune = res_mouse
+res_mouse_immune$gene_id = rownames(res_mouse)
+res_mouse_immune = data.frame(res_mouse_immune[,c("log2FoldChange","gene_id")]
+                              )
+colnames(res_mouse_immune)=c("Mouse","gene_id")
+res_mouse_immune = res_mouse_immune[selection_immune,]
+res_mouse_immune = merge(res_mouse_immune,mouse_G_symbol_list,by.x='gene_id',by.y='ensembl_gene_id')
+rownames(res_mouse_immune) = res_mouse_immune$mgi_symbol
+res_mouse_immune = res_mouse_immune[order(-res_mouse_immune$Mouse),]
+
+res_mouse_immune_2 = data.frame(res_mouse_immune[,"Mouse"])
+rownames(res_mouse_immune_2)=rownames(res_mouse_immune)
+colnames(res_mouse_immune_2)="Mouse"
+
+my.break=c(seq(-1,1,by=0.05))
+setwd("G:/Seq_data/PM/20210524_Analysis")
+pdf('mouse_glycolysis_gene_expression.pdf')
+pheatmap(res_mouse_immune_2,cluster_rows = F, cluster_cols = F, show_rownames = T, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(41), breaks=my.break
+)
+dev.off()
+```
+GO:0009636 response to toxic substance
+```{r}
+selection_immune = unique (c(ls(BP_mouse@graph@nodeData@data[["GO:0009636"]][["genes"]])
+                              )
+                            )
+res_mouse_immune = res_mouse
+res_mouse_immune$gene_id = rownames(res_mouse)
+res_mouse_immune = data.frame(res_mouse_immune[,c("log2FoldChange","gene_id")]
+                              )
+colnames(res_mouse_immune)=c("Mouse","gene_id")
+res_mouse_immune = res_mouse_immune[selection_immune,]
+res_mouse_immune = merge(res_mouse_immune,mouse_G_symbol_list,by.x='gene_id',by.y='ensembl_gene_id')
+rownames(res_mouse_immune) = res_mouse_immune$mgi_symbol
+res_mouse_immune = res_mouse_immune[order(-res_mouse_immune$Mouse),]
+
+res_mouse_immune_2 = data.frame(res_mouse_immune[,"Mouse"])
+rownames(res_mouse_immune_2)=rownames(res_mouse_immune)
+colnames(res_mouse_immune_2)="Mouse"
+
+my.break=c(seq(-1,1,by=0.05))
+setwd("G:/Seq_data/PM/20210524_Analysis")
+pdf('mouse_toxic_gene_expression.pdf')
+pheatmap(res_mouse_immune_2,cluster_rows = F, cluster_cols = F, show_rownames = T, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(41), breaks=my.break
+)
+dev.off()
+```
+
+GO:1902476 chloride transmembrane transport
+```{r}
+selection_immune = unique (c(ls(BP_mouse@graph@nodeData@data[["GO:1902476"]][["genes"]])
+                              )
+                            )
+res_mouse_immune = res_mouse
+res_mouse_immune$gene_id = rownames(res_mouse)
+res_mouse_immune = data.frame(res_mouse_immune[,c("log2FoldChange","gene_id")]
+                              )
+colnames(res_mouse_immune)=c("Mouse","gene_id")
+res_mouse_immune = res_mouse_immune[selection_immune,]
+res_mouse_immune = merge(res_mouse_immune,mouse_G_symbol_list,by.x='gene_id',by.y='ensembl_gene_id')
+rownames(res_mouse_immune) = res_mouse_immune$mgi_symbol
+res_mouse_immune = res_mouse_immune[order(-res_mouse_immune$Mouse),]
+
+res_mouse_immune_2 = data.frame(res_mouse_immune[,"Mouse"])
+rownames(res_mouse_immune_2)=rownames(res_mouse_immune)
+colnames(res_mouse_immune_2)="Mouse"
+
+my.break=c(seq(-1,1,by=0.05))
+setwd("G:/Seq_data/PM/20210524_Analysis")
+pdf('mouse_chloride_gene_expression.pdf')
+pheatmap(res_mouse_immune_2,cluster_rows = F, cluster_cols = F, show_rownames = T, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(41), breaks=my.break
+)
+dev.off()
+```
+GO:0006695 cholesterol biosynthetic process
+GO:0006631 fatty acid metabolic process
+GO:0006638 neutral lipid metabolic process
+GO:0006644 phospholipid metabolic process
+GO:0061621 canonical glycolysis
+GO:0009636 response to toxic substance
+```{r}
+log10(classic_BP_mouse@score['GO:0006695'])
+```
+
+
+#####LI_LUNG_CANCER
+```{r}
+selection_lung = read.csv('LI_LUNG_CANCER.txt',header=TRUE,skip=1)[[1]]
+selection_lung = R.utils::capitalize(tolower(selection_lung))
+
+res_diverse_lung = data.frame(res_mouse[,'log2FoldChange'])
+res_diverse_lung$gene_id = rownames(res_mouse)
+colnames(res_diverse_lung)=c("Mouse","gene_id")
+
+res_diverse_lung = merge(res_diverse_lung,mouse_G_symbol_list,by.x = 'gene_id',by.y='ensembl_gene_id')
+res_diverse_lung[res_diverse_lung$mgi_symbol=="",]=NA
+res_diverse_lung[duplicated(res_diverse_lung$mgi_symbol),]=NA
+res_diverse_lung=na.omit(res_diverse_lung)
+rownames(res_diverse_lung)=res_diverse_lung$mgi_symbol
+
+res_diverse_lung = res_diverse_lung[selection_lung,]
+res_diverse_lung = res_diverse_lung[order(-res_diverse_lung$Mouse),]
+
+res_diverse_lung_2 = as.data.frame(res_diverse_lung[,c("Mouse")])
+colnames(res_diverse_lung_2) ="Mouse"
+rownames(res_diverse_lung_2) = rownames(res_diverse_lung)
+res_diverse_lung_2=na.omit(res_diverse_lung_2)
+
+
+my.break=c(seq(-1,1,by=0.05))
+setwd("G:/Seq_data/PM/20210524_Analysis")
+pdf('mouse_LI_LUNG_CANCER_gene_expression.pdf')
+pheatmap(res_diverse_lung_2,cluster_rows = F, cluster_cols = F, show_rownames = T, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(41), breaks=my.break
+)
+dev.off()
+```
+#####LI_AMPLIFIED_IN_LUNG_CANCER
+```{r}
+selection_lung = read.csv('LI_AMPLIFIED_IN_LUNG_CANCER.txt',header=TRUE,skip=1)[[1]]
+selection_lung = R.utils::capitalize(tolower(selection_lung))
+
+res_diverse_lung = data.frame(res_mouse[,'log2FoldChange'])
+res_diverse_lung$gene_id = rownames(res_mouse)
+colnames(res_diverse_lung)=c("Mouse","gene_id")
+
+res_diverse_lung = merge(res_diverse_lung,mouse_G_symbol_list,by.x = 'gene_id',by.y='ensembl_gene_id')
+res_diverse_lung[res_diverse_lung$mgi_symbol=="",]=NA
+res_diverse_lung[duplicated(res_diverse_lung$mgi_symbol),]=NA
+res_diverse_lung=na.omit(res_diverse_lung)
+rownames(res_diverse_lung)=res_diverse_lung$mgi_symbol
+
+res_diverse_lung = res_diverse_lung[selection_lung,]
+res_diverse_lung = res_diverse_lung[order(-res_diverse_lung$Mouse),]
+
+res_diverse_lung_2 = as.data.frame(res_diverse_lung[,c("Mouse")])
+colnames(res_diverse_lung_2) ="Mouse"
+rownames(res_diverse_lung_2) = rownames(res_diverse_lung)
+res_diverse_lung_2=na.omit(res_diverse_lung_2)
+
+
+my.break=c(seq(-1,1,by=0.05))
+setwd("G:/Seq_data/PM/20210524_Analysis")
+pdf('mouse_LI_AMPLIFIED_IN_LUNG_CANCER_gene_expression.pdf')
+pheatmap(res_diverse_lung_2,cluster_rows = F, cluster_cols = F, show_rownames = T, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(41), breaks=my.break
+)
+dev.off()
+```
+#####LI_LUNG_CANCER_RNA
+```{r}
+selection_lung = read.csv('LI_LUNG_CANCER_RNA.grp',header=TRUE,skip=1)[[1]]
+selection_lung = R.utils::capitalize(tolower(selection_lung))
+
+res_diverse_lung = data.frame(res_mouse[,'log2FoldChange'])
+res_diverse_lung$gene_id = rownames(res_mouse)
+colnames(res_diverse_lung)=c("Mouse","gene_id")
+
+res_diverse_lung = merge(res_diverse_lung,mouse_G_symbol_list,by.x = 'gene_id',by.y='ensembl_gene_id')
+res_diverse_lung[res_diverse_lung$mgi_symbol=="",]=NA
+res_diverse_lung[duplicated(res_diverse_lung$mgi_symbol),]=NA
+res_diverse_lung=na.omit(res_diverse_lung)
+rownames(res_diverse_lung)=res_diverse_lung$mgi_symbol
+
+res_diverse_lung = res_diverse_lung[selection_lung,]
+res_diverse_lung = res_diverse_lung[order(-res_diverse_lung$Mouse),]
+
+res_diverse_lung_2 = as.data.frame(res_diverse_lung[,c("Mouse")])
+colnames(res_diverse_lung_2) ="Mouse"
+rownames(res_diverse_lung_2) = rownames(res_diverse_lung)
+res_diverse_lung_2=na.omit(res_diverse_lung_2)
+
+
+my.break=c(seq(-1,1,by=0.05))
+setwd("G:/Seq_data/PM/20210524_Analysis")
+pdf('mouse_LI_LUNG_CANCER_RNA_gene_expression.pdf')
+pheatmap(res_diverse_lung_2,cluster_rows = F, cluster_cols = F, show_rownames = T, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(41), breaks=my.break
+)
+dev.off()
+```
+
+
+#####VolcanoPlot of mouse
+mouse
+```{r}
+x=as.data.frame(res_mouse)
+sig_genes=selection_mouse
+fc_threshold = fc_threshold_mouse
+pval_threshold = -log10(pval_threshold_mouse)
+x$sig = 'non'
+x[sig_genes,'sig']='sig'
+x$alpha = 0.001
+x[sig_genes,'alpha']=0.001
+
+setwd("G:/Seq_data/PM/20210524_Analysis")
+tiff('mouse_volcano.tif',width=960,height=960)
+ggplot(x,aes(x=log2FoldChange,y=-log10(pvalue)))+
+  geom_point(aes(color=sig,size=10,alpha=alpha))+
+  scale_color_manual(values=c("gray","#EE5555"))+
+  theme_classic()+
+  scale_size_identity()+
+  geom_vline(xintercept = -fc_threshold, linetype="dotted",alpha=1, color = "gray", size=3)+
+  geom_vline(xintercept = +fc_threshold, linetype="dotted",alpha=1, color = "gray", size=3)+
+  geom_hline(yintercept = +pval_threshold, linetype='dotted',alpha=1,color='gray', size=3)+
+  coord_cartesian(xlim=c(-4,4),ylim=c(0,30))
+dev.off()
+```
+###TRAVAGLINI
+```{r}
+Mix_TRAVAGLINI = read.csv("Mix_TRAVAGLINI_NES.csv",header = F, sep=",",skip=1)
+Mix5_TRAVAGLINI = read.csv("Mix5_TRAVAGLINI_NES.csv",header = F, sep=",",skip=1)
+Mouse_TRAVAGLINI = read.csv("Mouse_TRAVAGLINI_NES.csv",header = F, sep=",",skip=1)
+
+TRAVAGLINI = Mix_TRAVAGLINI
+TRAVAGLINI = merge(TRAVAGLINI,Mix5_TRAVAGLINI,by.x = 'V1', by.y='V1')
+TRAVAGLINI = merge(TRAVAGLINI,Mouse_TRAVAGLINI,by.x = 'V1', by.y='V1')[,c('V1','V7.x','V8.x','V7.y','V8.y','V7','V8')]
+colnames(TRAVAGLINI)=c("cell type","Mix_NES","Mix_pval","Mix5_NES","Mix5_pval","Mouse_NES","Mouse_pval")
+rownames(TRAVAGLINI)=TRAVAGLINI[,'cell type']
+rownames(TRAVAGLINI)=substring(rownames(TRAVAGLINI),17)
+
+my.break = my.break=c(seq(-2,2,by=0.05))
+pdf("TRAVAGLINI_heatmap.pdf")
+pheatmap(TRAVAGLINI[,c("Mix5_NES","Mix_NES","Mouse_NES")],cluster_rows = T, cluster_cols = F, show_rownames = T, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(81), breaks=my.break
+)
+dev.off()
+```
+###comp
+#####GOterm heatmap of comp
+```{r}
+x=ViSEAGO::show_heatmap(
+    comp_Wang_clusters_wardD2,
+    "GOterms",
+)
+#orca(x,'high_heatmap.svg')
+```
+#####GOclusters heatmap of comp
+```{r}
+ViSEAGO::show_heatmap(
+    comp_Wang_clusters_wardD2,
+    "GOclusters",
+    file='high_heatmap_cluster.png',
+)
+```
+#only mouse
+```{r}
+setwd("G:/Seq_data/PM/20210524_Analysis")
+Mix_TRAVAGLINI = read.csv("Mix_TRAVAGLINI_NES.csv",header = F, sep=",",skip=1)
+Mix5_TRAVAGLINI = read.csv("Mix5_TRAVAGLINI_NES.csv",header = F, sep=",",skip=1)
+Mouse_TRAVAGLINI = read.csv("Mouse_TRAVAGLINI_NES.csv",header = F, sep=",",skip=1)
+
+TRAVAGLINI = Mix_TRAVAGLINI
+TRAVAGLINI = merge(TRAVAGLINI,Mix5_TRAVAGLINI,by.x = 'V1', by.y='V1')
+TRAVAGLINI = merge(TRAVAGLINI,Mouse_TRAVAGLINI,by.x = 'V1', by.y='V1')[,c('V1','V7.x','V8.x','V7.y','V8.y','V7','V8')]
+colnames(TRAVAGLINI)=c("cell type","Mix_NES","Mix_pval","Mix5_NES","Mix5_pval","Mouse_NES","Mouse_pval")
+rownames(TRAVAGLINI)=TRAVAGLINI[,'cell type']
+rownames(TRAVAGLINI)=substring(rownames(TRAVAGLINI),17)
+
+my.break = my.break=c(seq(-2,2,by=0.05))
+pdf("TRAVAGLINI_mouse_heatmap.pdf")
+pheatmap(TRAVAGLINI[order(-TRAVAGLINI$Mouse_NES),c("Mix5_NES","Mix_NES","Mouse_NES")],cluster_rows = F, cluster_cols = F, show_rownames = T, scale='none',
+         clustering_distance_rows = 'euclidean',clustering_method = 'ward.D2',
+         color=colorRampPalette(c('#0011DD','white','#DD1100'))(81), breaks=my.break
+)
+dev.off()
+```
+#etc
+```{r}
+setwd("G:/Seq_data/PM/20210524_Analysis")
+write.csv(res_high,"res_high.csv")
+write.csv(res_diverse,"res_diverse.csv")
+write.csv(res_mouse,"res_mouse.csv")
+write.csv(high_Wang_clusters_wardD2@enrich_GOs@data,"high_GO.csv")
+write.csv(diverse_Wang_clusters_wardD2@enrich_GOs@data,"diverse_GO.csv")
+write.csv(mouse_Wang_clusters_wardD2@enrich_GOs@data,"mouse_GO.csv")
+```
+
+```{r}
+export = res_Mix
+export$gene_id = rownames(export)
+export = merge(data.frame(export),human_G_symbol_list,by.x='gene_id',by.y='ensembl_gene_id')
+write.csv(export,"res_Mix_genesymbol.csv")
+```
+
+```{r}
+export = res_mouse
+export$gene_id = rownames(export)
+export = merge(data.frame(export),mouse_G_symbol_list,by.x='gene_id',by.y='ensembl_gene_id')
+write.csv(export,"res_mouse_mgi.csv")
+```
+
+```
+color=colorRampPalette(c('#0011DD','white','#DD1100'))(81), breaks=my.break
+
+
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
